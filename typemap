@@ -5,6 +5,7 @@ datum_value T_DATUM_V
 QDBM_File   T_QDBM
 ODEUM*      T_ODEUM
 ODDOC*      T_DOC
+const char* T_PV
 
 INPUT
 

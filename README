@@ -1,4 +1,4 @@
-QDBM_File 0.01
+QDBM_File 0.02
 
 QDBM_File is a module which allows Perl programs to make use of the
 facilities provided by the qdbm library. If you use this module, you
@@ -10,7 +10,7 @@ Vista and Odeum. Documents are available at http://qdbm.sourceforge.net/
 
 PREREQUISITES
 
-    QDBM 1.8.77 or lator
+    QDBM 1.8.77 or later
 
 The official web site for QDBM is http://qdbm.sourceforge.net/
 

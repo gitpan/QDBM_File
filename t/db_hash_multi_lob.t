@@ -66,9 +66,15 @@ is( $db->count_lob_records, 6 );
 $tie{'empty value'} = '';
 ok( $tie{'empty value'} eq '' );
 
-# LOB not accept empty key
-my $stat1 = eval { $tie{''} = 'empty key'; };
-ok(!$stat1);
+SKIP: {
+    my $stat1 = eval { $tie{''} = 'empty key'; };
+
+    if (!$stat1) {
+        skip("LOB: can not use empty key", 1);
+    }
+
+    ok($stat1);
+}
 
 $tie{'cattest'} = "CAT";
 $db->STORE('cattest', "TEST", QD_CAT);

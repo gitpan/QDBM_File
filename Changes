@@ -1,5 +1,8 @@
 Revision history for QDBM_File
 
-0.01    Sun Dec  2 17:42:36 2007
-        First version, released on an unsuspecting world.
+0.02    Mon Dec 3 18:54:26 2007
+        * Fixed db_hash_multi_lob.t for empty key
+        * Fixed typemap. const char* added
 
+0.01    Sun Dec 2 17:42:36 2007
+        * First version, released on an unsuspecting world.
