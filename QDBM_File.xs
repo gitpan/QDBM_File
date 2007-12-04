@@ -10,6 +10,60 @@
 #include "vista_xs.h"
 #include "odeum.h"
 
+/*
+   The DBM_setFilter & DBM_ckFilter macros are only used by
+   the *DB*_File modules
+   imported from XSUB.h for older XS
+*/
+
+#ifndef DBM_setFilter
+#define DBM_setFilter(db_type,code)                 \
+    STMT_START {                                    \
+        if (db_type)                                \
+            RETVAL = sv_mortalcopy(db_type) ;       \
+        ST(0) = RETVAL ;                            \
+        if (db_type && (code == &PL_sv_undef)) {    \
+                SvREFCNT_dec(db_type) ;             \
+            db_type = NULL ;                        \
+        }                                           \
+        else if (code) {                            \
+            if (db_type)                            \
+                sv_setsv(db_type, code) ;           \
+            else                                    \
+                db_type = newSVsv(code) ;           \
+        }                                           \
+    } STMT_END
+#endif
+
+#ifndef DBM_ckFilter
+#define DBM_ckFilter(arg,type,name)                     \
+        STMT_START {                                    \
+    if (db->type) {                                     \
+        if (db->filtering) {                            \
+            croak("recursion detected in %s", name) ;   \
+        }                                               \
+        ENTER ;                                         \
+        SAVETMPS ;                                      \
+        SAVEINT(db->filtering) ;                        \
+        db->filtering = TRUE ;                          \
+        SAVESPTR(DEFSV) ;                               \
+            if (name[7] == 's')                         \
+                arg = newSVsv(arg);                     \
+        DEFSV = arg ;                                   \
+        SvTEMP_off(arg) ;                               \
+        PUSHMARK(SP) ;                                  \
+        PUTBACK ;                                       \
+        (void) call_sv(db->type, G_DISCARD);            \
+        SPAGAIN ;                                       \
+        PUTBACK ;                                       \
+        FREETMPS ;                                      \
+        LEAVE ;                                         \
+            if (name[7] == 's'){                        \
+                arg = sv_2mortal(arg);                  \
+            }                                           \
+    } } STMT_END
+#endif
+
 typedef struct {
     void* dbp;
     SV* comparer; /* subroutine reference */
@@ -86,7 +140,7 @@ BOOT:
     HV* stash;
     MY_CXT_INIT;
     MY_CXT.comparer = &PL_sv_undef;
-    stash = gv_stashpvs("QDBM_File", TRUE);
+    stash = gv_stashpv("QDBM_File", TRUE);
     newCONSTSUB( stash, "QD_OVER", newSViv(QD_OVER) );
     newCONSTSUB( stash, "QD_KEEP", newSViv(QD_KEEP) );
     newCONSTSUB( stash, "QD_CAT",  newSViv(QD_CAT)  );

@@ -1,5 +1,10 @@
 Revision history for QDBM_File
 
+0.03    Tue Dec 4 19:42:13 2007
+        * Fixed QDBM_File.xs: Improved backward compatibility
+          gv_stashpvs changed to gv_stashpv
+          DBM_setFilter and DBM_ckFilter added if not defined
+
 0.02    Mon Dec 3 18:54:26 2007
         * Fixed db_hash_multi_lob.t for empty key
         * Fixed typemap. const char* added
