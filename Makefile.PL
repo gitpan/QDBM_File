@@ -15,7 +15,11 @@ WriteMakefile(
     LIBS          => [$LIBS],
     DEFINE        => $DEFINE,
     XSOPT         => '-noprototypes',
-    LICENSE       => 'perl',
+    (
+        (ExtUtils::MakeMaker->VERSION() gt '6.30')
+            ? ('LICENSE' => 'perl')
+            : ()
+    ),
     PREREQ_PM => {
         'Test::More' => 0,
     },

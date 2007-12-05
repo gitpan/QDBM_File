@@ -1,4 +1,4 @@
-#!perl -T
+#!perl -w
 
 use Test::More;
 eval "use Test::Pod 1.14";

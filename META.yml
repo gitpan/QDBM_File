@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                QDBM_File
-version:             0.03
+version:             0.04
 abstract:            Tied access to Quick Database Manager
 license:             perl
 generated_by:        ExtUtils::MakeMaker version 6.36

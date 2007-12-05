@@ -1,6 +1,9 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+
+/* for 5.6.1 */
+#define NEED_sv_2pvbyte
 #include "ppport.h"
 
 #include "depot.h"

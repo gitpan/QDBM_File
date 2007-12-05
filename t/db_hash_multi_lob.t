@@ -1,4 +1,4 @@
-#!perl -T
+#!perl -w
 
 # QDBM_File::Multiple::LOB test script based on DB_File - db_hash.t
 

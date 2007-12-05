@@ -1,4 +1,4 @@
-#!perl -T
+#!perl -w
 
 # QDBM_File::BTree::Multiple test script based on DB_File - db_btree.t
 
