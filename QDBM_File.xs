@@ -16,55 +16,57 @@
 /*
    The DBM_setFilter & DBM_ckFilter macros are only used by
    the *DB*_File modules
-   imported from XSUB.h for older XS
+   Imported from XSUB.h for older XS
 */
 
 #ifndef DBM_setFilter
-#define DBM_setFilter(db_type,code)                 \
+#define DBM_setFilter(db_type, code)                \
     STMT_START {                                    \
         if (db_type)                                \
-            RETVAL = sv_mortalcopy(db_type) ;       \
-        ST(0) = RETVAL ;                            \
-        if (db_type && (code == &PL_sv_undef)) {    \
-                SvREFCNT_dec(db_type) ;             \
-            db_type = NULL ;                        \
+            RETVAL = sv_mortalcopy(db_type);        \
+        ST(0) = RETVAL;                             \
+        if ( db_type && (code == &PL_sv_undef) ) {  \
+            SvREFCNT_dec(db_type);                  \
+            db_type = NULL;                         \
         }                                           \
         else if (code) {                            \
             if (db_type)                            \
-                sv_setsv(db_type, code) ;           \
+                sv_setsv(db_type, code);            \
             else                                    \
-                db_type = newSVsv(code) ;           \
+                db_type = newSVsv(code);            \
         }                                           \
     } STMT_END
 #endif
 
 #ifndef DBM_ckFilter
-#define DBM_ckFilter(arg,type,name)                     \
-        STMT_START {                                    \
-    if (db->type) {                                     \
-        if (db->filtering) {                            \
-            croak("recursion detected in %s", name) ;   \
-        }                                               \
-        ENTER ;                                         \
-        SAVETMPS ;                                      \
-        SAVEINT(db->filtering) ;                        \
-        db->filtering = TRUE ;                          \
-        SAVESPTR(DEFSV) ;                               \
-            if (name[7] == 's')                         \
-                arg = newSVsv(arg);                     \
-        DEFSV = arg ;                                   \
-        SvTEMP_off(arg) ;                               \
-        PUSHMARK(SP) ;                                  \
-        PUTBACK ;                                       \
-        (void) call_sv(db->type, G_DISCARD);            \
-        SPAGAIN ;                                       \
-        PUTBACK ;                                       \
-        FREETMPS ;                                      \
-        LEAVE ;                                         \
-            if (name[7] == 's'){                        \
-                arg = sv_2mortal(arg);                  \
-            }                                           \
-    } } STMT_END
+#define DBM_ckFilter(arg, type, name)                       \
+    STMT_START {                                            \
+        if (db->type) {                                     \
+            if (db->filtering) {                            \
+                croak("recursion detected in %s", name);    \
+            }                                               \
+            ENTER;                                          \
+            SAVETMPS;                                       \
+            SAVEINT(db->filtering);                         \
+            db->filtering = TRUE;                           \
+            SAVESPTR(DEFSV);                                \
+            if (name[7] == 's') {                           \
+                arg = newSVsv(arg);                         \
+            }                                               \
+            DEFSV = arg;                                    \
+            SvTEMP_off(arg);                                \
+            PUSHMARK(SP);                                   \
+            PUTBACK;                                        \
+            (void)call_sv(db->type, G_DISCARD);             \
+            SPAGAIN;                                        \
+            PUTBACK;                                        \
+            FREETMPS;                                       \
+            LEAVE;                                          \
+            if (name[7] == 's') {                           \
+                arg = sv_2mortal(arg);                      \
+            }                                               \
+        }                                                   \
+    } STMT_END
 #endif
 
 typedef struct {
@@ -171,7 +173,7 @@ CODE:
         RETVAL->dbp = (void*)dbp;
     }
     else {
-        croak( "qdbm open error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -194,23 +196,20 @@ CODE:
     }
 
 datum_value
-FETCH(QDBM_File db, datum_key key)
+FETCH(QDBM_File db, datum_key key, int start = 0, int offset = -1)
 PREINIT:
     int ksize;
     int vsize;
     char* value;
 CODE:
     ksize = SvCUR(key);
-    value = dpget( dpptr(db), SvPVbyte(key, ksize), ksize, 0, -1, &vsize );
-    if (value) {
+    value = dpget( dpptr(db), SvPVbyte(key, ksize), ksize, start, offset, &vsize );
+    if (NULL != value) {
         RETVAL = newSVpvn(value, vsize);
         cbfree(value);
     }
-    else if ( !dpfatalerror( dpptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -228,7 +227,7 @@ CODE:
     else if (QD_KEEP == flags) { dmode = DP_DKEEP; }
     else if (QD_CAT  == flags) { dmode = DP_DCAT ; }
     else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = (bool)dpput(
+    RETVAL = dpput(
         dpptr(db),
         SvPVbyte(key, ksize),
         ksize,
@@ -236,9 +235,6 @@ CODE:
         vsize,
         dmode
     );
-    if (!RETVAL && dpfatalerror( dpptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -248,10 +244,7 @@ PREINIT:
     int ksize;
 CODE:
     ksize = SvCUR(key);
-    RETVAL = (bool)dpout( dpptr(db), SvPVbyte(key, ksize), ksize );
-    if (!RETVAL && dpfatalerror( dpptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpout( dpptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -263,7 +256,7 @@ PREINIT:
 CODE:
     ksize = SvCUR(key);
     vsize = dpvsiz( dpptr(db), SvPVbyte(key, ksize), ksize );
-    RETVAL = (bool)(-1 != vsize);
+    RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
 
@@ -275,11 +268,16 @@ PREINIT:
 CODE:
     if ( dpiterinit( dpptr(db) ) ) {
         key = dpiternext( dpptr(db), &ksize );
-        RETVAL = newSVpvn(key, ksize);
-        cbfree(key);
+        if (NULL != key) {
+            RETVAL = newSVpvn(key, ksize);
+            cbfree(key);
+        }
+        else {
+            XSRETURN_UNDEF;
+        }
     }
     else {
-        croak( "qdbm iterator init error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -295,11 +293,8 @@ CODE:
         RETVAL = newSVpvn(key, ksize);
         cbfree(key);
     }
-    else if ( !dpfatalerror( dpptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm get key error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -312,40 +307,28 @@ CODE:
 bool
 set_align(QDBM_File db, int align)
 CODE:
-    RETVAL = (bool)dpsetalign( dpptr(db), align );
-    if (!RETVAL) {
-        croak( "qdbm set_align error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpsetalign( dpptr(db), align );
 OUTPUT:
     RETVAL
 
 bool
 set_fbp_size(QDBM_File db, int size)
 CODE:
-    RETVAL = (bool)dpsetfbpsiz( dpptr(db), size );
-    if (!RETVAL) {
-        croak( "qdbm set_fbp_size error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpsetfbpsiz( dpptr(db), size );
 OUTPUT:
     RETVAL
 
 bool
 sync(QDBM_File db)
 CODE:
-    RETVAL = (bool)dpsync( dpptr(db) );
-    if (!RETVAL) {
-        croak( "qdbm sync error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpsync( dpptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 optimize(QDBM_File db, int buckets = -1)
 CODE:
-    RETVAL = (bool)dpoptimize( dpptr(db), buckets );
-    if (!RETVAL) {
-        croak( "qdbm optimize error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpoptimize( dpptr(db), buckets );
 OUTPUT:
     RETVAL
 
@@ -362,7 +345,7 @@ OUTPUT:
 bool
 iterator_init(QDBM_File db)
 CODE:
-    RETVAL = (bool)dpiterinit( dpptr(db) );
+    RETVAL = dpiterinit( dpptr(db) );
 OUTPUT:
     RETVAL
 
@@ -377,7 +360,7 @@ CODE:
         cbfree(name);
     }
     else {
-        croak( "qdbm get_name error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -386,9 +369,6 @@ int
 get_size(QDBM_File db)
 CODE:
     RETVAL = dpfsiz( dpptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_size error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -396,9 +376,6 @@ int
 count_buckets(QDBM_File db)
 CODE:
     RETVAL = dpbnum( dpptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_buckets error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -406,9 +383,6 @@ int
 count_used_buckets(QDBM_File db)
 CODE:
     RETVAL = dpbusenum( dpptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_used_buckets error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -416,23 +390,27 @@ int
 count_records(QDBM_File db)
 CODE:
     RETVAL = dprnum( dpptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_records error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
 bool
 is_writable(QDBM_File db)
 CODE:
-    RETVAL = (bool)dpwritable( dpptr(db) );
+    RETVAL = dpwritable( dpptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 is_fatal_error(QDBM_File db)
 CODE:
-    RETVAL = (bool)dpfatalerror( dpptr(db) );
+    RETVAL = dpfatalerror( dpptr(db) );
+OUTPUT:
+    RETVAL
+
+const char*
+get_error(SV* package)
+CODE:
+    RETVAL = dperrmsg(dpecode);
 OUTPUT:
     RETVAL
 
@@ -446,35 +424,24 @@ OUTPUT:
 bool
 repair(SV* package, char* filename)
 CODE:
-    if ( sv_isobject(package) && sv_derived_from(package, "QDBM_File") ) {
-        croak("qdbm repair error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm repair warning: called via instance method\n");
     }
-    else {
-        RETVAL = (bool)dprepair(filename);
-        if (!RETVAL) {
-            croak( "qdbm repair error: %s\n", dperrmsg(dpecode) );
-        }
-    }
+    RETVAL = dprepair(filename);
 OUTPUT:
     RETVAL
 
 bool
 export_db(QDBM_File db, char* filename)
 CODE:
-    RETVAL = (bool)dpexportdb( dpptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm export error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpexportdb( dpptr(db), filename );
 OUTPUT:
     RETVAL
 
 bool
 import_db(QDBM_File db, char* filename)
 CODE:
-    RETVAL = (bool)dpimportdb( dpptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm import error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = dpimportdb( dpptr(db), filename );
 OUTPUT:
     RETVAL
 
@@ -498,7 +465,7 @@ CODE:
         RETVAL->dbp = (void*)dbp;
     }
     else {
-        croak( "qdbm open error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -521,23 +488,20 @@ CODE:
     }
 
 datum_value
-FETCH(QDBM_File db, datum_key key)
+FETCH(QDBM_File db, datum_key key, int start = 0, int offset = -1)
 PREINIT:
     int ksize;
     int vsize;
     char* value;
 CODE:
     ksize = SvCUR(key);
-    value = crget( crptr(db), SvPVbyte(key, ksize), ksize, 0, -1, &vsize );
-    if (value) {
+    value = crget( crptr(db), SvPVbyte(key, ksize), ksize, start, offset, &vsize );
+    if (NULL != value) {
         RETVAL = newSVpvn(value, vsize);
         cbfree(value);
     }
-    else if ( !crfatalerror( crptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -555,7 +519,7 @@ CODE:
     else if (QD_KEEP == flags) { dmode = CR_DKEEP; }
     else if (QD_CAT  == flags) { dmode = CR_DCAT ; }
     else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = (bool)crput(
+    RETVAL = crput(
         crptr(db),
         SvPVbyte(key, ksize),
         ksize,
@@ -563,9 +527,6 @@ CODE:
         vsize,
         dmode
     );
-    if (!RETVAL && crfatalerror( crptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -575,10 +536,7 @@ PREINIT:
     int ksize;
 CODE:
     ksize = SvCUR(key);
-    RETVAL = (bool)crout( crptr(db), SvPVbyte(key, ksize), ksize );
-    if (!RETVAL && crfatalerror( crptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = crout( crptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -590,7 +548,7 @@ PREINIT:
 CODE:
     ksize = SvCUR(key);
     vsize = crvsiz( crptr(db), SvPVbyte(key, ksize), ksize );
-    RETVAL = (bool)(-1 != vsize);
+    RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
 
@@ -602,11 +560,16 @@ PREINIT:
 CODE:
     if ( criterinit( crptr(db) ) ) {
         key = criternext( crptr(db), &ksize );
-        RETVAL = newSVpvn(key, ksize);
-        cbfree(key);
+        if (NULL != key) {
+            RETVAL = newSVpvn(key, ksize);
+            cbfree(key);
+        }
+        else {
+            XSRETURN_UNDEF;
+        }
     }
     else {
-        croak( "qdbm iterator init error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -622,11 +585,8 @@ CODE:
         RETVAL = newSVpvn(key, ksize);
         cbfree(key);
     }
-    else if ( !crfatalerror( crptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm get key error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -634,40 +594,28 @@ OUTPUT:
 bool
 set_align(QDBM_File db, int align)
 CODE:
-    RETVAL = (bool)crsetalign( crptr(db), align );
-    if (!RETVAL) {
-        croak( "qdbm set_align error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = crsetalign( crptr(db), align );
 OUTPUT:
     RETVAL
 
 bool
 set_fbp_size(QDBM_File db, int size)
 CODE:
-    RETVAL = (bool)crsetfbpsiz( crptr(db), size);
-    if (!RETVAL) {
-        croak( "qdbm set_fbp_size error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = crsetfbpsiz( crptr(db), size);
 OUTPUT:
     RETVAL
 
 bool
 sync(QDBM_File db)
 CODE:
-    RETVAL = (bool)crsync( crptr(db) );
-    if (!RETVAL) {
-        croak( "qdbm sync error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = crsync( crptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 optimize(QDBM_File db, int buckets = -1)
 CODE:
-    RETVAL = (bool)croptimize( crptr(db), buckets );
-    if (!RETVAL) {
-        croak( "qdbm optimize error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = croptimize( crptr(db), buckets );
 OUTPUT:
     RETVAL
 
@@ -684,7 +632,7 @@ OUTPUT:
 bool
 iterator_init(QDBM_File db)
 CODE:
-    RETVAL = (bool)criterinit( crptr(db) );
+    RETVAL = criterinit( crptr(db) );
 OUTPUT:
     RETVAL
 
@@ -699,7 +647,7 @@ CODE:
         cbfree(name);
     }
     else {
-        croak( "qdbm get_name error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -708,9 +656,6 @@ int
 get_size(QDBM_File db)
 CODE:
     RETVAL = crfsiz( crptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_size error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -718,9 +663,6 @@ int
 count_buckets(QDBM_File db)
 CODE:
     RETVAL = crbnum( crptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_buckets error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -728,9 +670,6 @@ int
 count_used_buckets(QDBM_File db)
 CODE:
     RETVAL = crbusenum( crptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_used_buckets error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -738,23 +677,27 @@ int
 count_records(QDBM_File db)
 CODE:
     RETVAL = crrnum( crptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_records error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
 bool
 is_writable(QDBM_File db)
 CODE:
-    RETVAL = (bool)crwritable( crptr(db) );
+    RETVAL = crwritable( crptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 is_fatal_error(QDBM_File db)
 CODE:
-    RETVAL = (bool)crfatalerror( crptr(db) );
+    RETVAL = crfatalerror( crptr(db) );
+OUTPUT:
+    RETVAL
+
+const char*
+get_error(SV* package)
+CODE:
+    RETVAL = dperrmsg(dpecode);
 OUTPUT:
     RETVAL
 
@@ -768,35 +711,24 @@ OUTPUT:
 bool
 repair(SV* package, char* filename)
 CODE:
-    if ( SvROK(package) ) {
-        croak("qdbm repair error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm repair warning: called via instance method\n");
     }
-    else {
-        RETVAL = (bool)crrepair(filename);
-        if (!RETVAL) {
-            croak( "qdbm repair error: %s\n", dperrmsg(dpecode) );
-        }
-    }
+    RETVAL = crrepair(filename);
 OUTPUT:
     RETVAL
 
 bool
 export_db(QDBM_File db, char* filename)
 CODE:
-    RETVAL = (bool)crexportdb( crptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm export error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = crexportdb( crptr(db), filename );
 OUTPUT:
     RETVAL
 
 bool
 import_db(QDBM_File db, char* filename)
 CODE:
-    RETVAL = (bool)crimportdb( crptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm import error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = crimportdb( crptr(db), filename );
 OUTPUT:
     RETVAL
 
@@ -809,15 +741,12 @@ PREINIT:
 CODE:
     ksize = SvCUR(key);
     value = crgetlob( crptr(db), SvPVbyte(key, ksize), ksize, 0, -1, &vsize );
-    if (value) {
+    if (NULL != value) {
         RETVAL = newSVpvn(value, vsize);
         cbfree(value);
     }
-    else if ( !crfatalerror( crptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -835,7 +764,7 @@ CODE:
     else if (QD_KEEP == flags) { dmode = CR_DKEEP; }
     else if (QD_CAT  == flags) { dmode = CR_DCAT ; }
     else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = (bool)crputlob(
+    RETVAL = crputlob(
         crptr(db),
         SvPVbyte(key, ksize),
         ksize,
@@ -843,9 +772,6 @@ CODE:
         vsize,
         dmode
     );
-    if (!RETVAL && crfatalerror( crptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -855,10 +781,7 @@ PREINIT:
     int ksize;
 CODE:
     ksize = SvCUR(key);
-    RETVAL = (bool)croutlob( crptr(db), SvPVbyte(key, ksize), ksize );
-    if (!RETVAL && crfatalerror( crptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = croutlob( crptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -870,7 +793,7 @@ PREINIT:
 CODE:
     ksize = SvCUR(key);
     vsize = crvsizlob( crptr(db), SvPVbyte(key, ksize), ksize );
-    RETVAL = (bool)(-1 != vsize);
+    RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
 
@@ -878,9 +801,6 @@ int
 count_lob_records(QDBM_File db)
 CODE:
     RETVAL = crrnumlob( crptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_records error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -909,7 +829,7 @@ CODE:
         RETVAL->comparer = newSVsv(comparer);
     }
     else {
-        croak( "qdbm open error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -948,11 +868,8 @@ CODE:
         RETVAL = newSVpvn(value, vsize);
         cbfree(value);
     }
-    else if ( !vlfatalerror( vlptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -975,7 +892,7 @@ CODE:
     else if (QD_DUP  == flags) { dmode = VL_DDUP ; }
     else if (QD_DUPR == flags) { dmode = VL_DDUPR; }
     else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = (bool)vlput(
+    RETVAL = vlput(
         vlptr(db),
         SvPVbyte(key, ksize),
         ksize,
@@ -983,9 +900,6 @@ CODE:
         vsize,
         dmode
     );
-    if (!RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -998,10 +912,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vlout( vlptr(db), SvPVbyte(key, ksize), ksize );
-    if (!RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlout( vlptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -1016,7 +927,7 @@ CODE:
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
     vsize = vlvsiz( vlptr(db), SvPVbyte(key, ksize), ksize );
-    RETVAL = (bool)(-1 != vsize);
+    RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
 
@@ -1031,14 +942,16 @@ CODE:
     MY_CXT.comparer = db->comparer;
     if ( vlcurfirst( vlptr(db) ) ) {
         key = vlcurkey( vlptr(db), &ksize );
-        RETVAL = newSVpvn(key, ksize);
-        cbfree(key);
-    }
-    else if ( !vlfatalerror( vlptr(db) ) ) {
-        XSRETURN_UNDEF;
+        if (NULL != key) {
+            RETVAL = newSVpvn(key, ksize);
+            cbfree(key);
+        }
+        else {
+            XSRETURN_UNDEF;
+        }
     }
     else {
-        croak( "qdbm iterator init error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1058,18 +971,12 @@ CODE:
             RETVAL = newSVpvn(key, ksize);
             cbfree(key);
         }
-        else if ( !vlfatalerror( vlptr(db) ) ) {
+        else {
             XSRETURN_UNDEF;
         }
-        else {
-            croak( "qdbm get key error: %s\n", dperrmsg(dpecode) );
-        }
-    }
-    else if ( !vlfatalerror( vlptr(db) ) ) {
-        XSRETURN_UNDEF;
     }
     else {
-        croak( "qdbm iterator error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1114,10 +1021,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vloutlist( vlptr(db), SvPVbyte(key, ksize), ksize );
-    if ( !RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vloutlist( vlptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -1146,11 +1050,8 @@ PPCODE:
         }
         cblistclose(list);
     }
-    else if ( !vlfatalerror( vlptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_EMPTY;
     }
 
 bool
@@ -1171,10 +1072,7 @@ CODE:
         cblistpush(list, SvPVbyte( ST(i), vsize ), vsize);
     }
     ksize = SvCUR(key);
-    RETVAL = (bool)vlputlist( vlptr(db), SvPVbyte(key, ksize), ksize, list );
-    if ( !RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlputlist( vlptr(db), SvPVbyte(key, ksize), ksize, list );
 OUTPUT:
     RETVAL
 CLEANUP:
@@ -1187,7 +1085,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlcurfirst( vlptr(db) );
+    RETVAL = vlcurfirst( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1198,7 +1096,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlcurfirst( vlptr(db) );
+    RETVAL = vlcurfirst( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1209,7 +1107,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlcurlast( vlptr(db) );
+    RETVAL = vlcurlast( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1220,7 +1118,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlcurnext( vlptr(db) );
+    RETVAL = vlcurnext( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1231,7 +1129,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlcurprev( vlptr(db) );
+    RETVAL = vlcurprev( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1244,7 +1142,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vlcurjump( vlptr(db), SvPVbyte(key, ksize), ksize, VL_JFORWARD );
+    RETVAL = vlcurjump( vlptr(db), SvPVbyte(key, ksize), ksize, VL_JFORWARD );
 OUTPUT:
     RETVAL
 
@@ -1257,7 +1155,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vlcurjump( vlptr(db), SvPVbyte(key, ksize), ksize, VL_JBACKWARD );
+    RETVAL = vlcurjump( vlptr(db), SvPVbyte(key, ksize), ksize, VL_JBACKWARD );
 OUTPUT:
     RETVAL
 
@@ -1310,15 +1208,12 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     vsize = SvCUR(value);
-    RETVAL = (bool)vlcurput(
+    RETVAL = vlcurput(
         vlptr(db),
         SvPVbyte(value, vsize),
         vsize,
         VL_CPCURRENT
     );
-    if (!RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1331,15 +1226,12 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     vsize = SvCUR(value);
-    RETVAL = (bool)vlcurput(
+    RETVAL = vlcurput(
         vlptr(db),
         SvPVbyte(value, vsize),
         vsize,
         VL_CPAFTER
     );
-    if (!RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1352,15 +1244,12 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     vsize = SvCUR(value);
-    RETVAL = (bool)vlcurput(
+    RETVAL = vlcurput(
         vlptr(db),
         SvPVbyte(value, vsize),
         vsize,
         VL_CPBEFORE
     );
-    if (!RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1371,10 +1260,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlcurout( vlptr(db) );
-    if (!RETVAL && vlfatalerror( vlptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlcurout( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1386,30 +1272,21 @@ CODE:
 bool
 set_fbp_size(QDBM_File db, int size)
 CODE:
-    RETVAL = (bool)vlsetfbpsiz( vlptr(db), size );
-    if (!RETVAL) {
-        croak( "qdbm set_fbp_size error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlsetfbpsiz( vlptr(db), size );
 OUTPUT:
     RETVAL
 
 bool
 sync(QDBM_File db)
 CODE:
-    RETVAL = (bool)vlsync( vlptr(db) );
-    if (!RETVAL) {
-        croak( "qdbm sync error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlsync( vlptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 optimize(QDBM_File db)
 CODE:
-    RETVAL = (bool)vloptimize( vlptr(db) );
-    if (!RETVAL) {
-        croak( "qdbm optimize error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vloptimize( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1424,7 +1301,7 @@ CODE:
         cbfree(name);
     }
     else {
-        croak( "qdbm get_name error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1433,9 +1310,6 @@ int
 get_size(QDBM_File db)
 CODE:
     RETVAL = vlfsiz( vlptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_size error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1443,9 +1317,6 @@ int
 count_leafs(QDBM_File db)
 CODE:
     RETVAL = vllnum( vlptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_leafs error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1453,9 +1324,6 @@ int
 count_non_leafs(QDBM_File db)
 CODE:
     RETVAL = vlnnum( vlptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_non_leafs error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1463,23 +1331,27 @@ int
 count_records(QDBM_File db)
 CODE:
     RETVAL = vlrnum( vlptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_records error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
 bool
 is_writable(QDBM_File db)
 CODE:
-    RETVAL = (bool)vlwritable( vlptr(db) );
+    RETVAL = vlwritable( vlptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 is_fatal_error(QDBM_File db)
 CODE:
-    RETVAL = (bool)vlfatalerror( vlptr(db) );
+    RETVAL = vlfatalerror( vlptr(db) );
+OUTPUT:
+    RETVAL
+
+const char*
+get_error(SV* package)
+CODE:
+    RETVAL = dperrmsg(dpecode);
 OUTPUT:
     RETVAL
 
@@ -1493,21 +1365,21 @@ OUTPUT:
 bool
 begin_transaction(QDBM_File db)
 CODE:
-    RETVAL = (bool)vltranbegin( vlptr(db) );
+    RETVAL = vltranbegin( vlptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 commit(QDBM_File db)
 CODE:
-    RETVAL = (bool)vltrancommit( vlptr(db) );
+    RETVAL = vltrancommit( vlptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 rollback(QDBM_File db)
 CODE:
-    RETVAL = (bool)vltranabort( vlptr(db) );
+    RETVAL = vltranabort( vlptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1520,15 +1392,10 @@ CODE:
     cmpptr = SvOK(comparer) ? btree_compare : VL_CMPLEX;
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = comparer;
-    if ( sv_isobject(package) && sv_derived_from(package, "QDBM_File::BTree") ) {
-        croak("qdbm repair error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm repair warning: called via instance method\n");
     }
-    else {
-        RETVAL = (bool)vlrepair(filename, cmpptr);
-        if (!RETVAL) {
-            croak( "qdbm repair error: %s\n", dperrmsg(dpecode) );
-        }
-    }
+    RETVAL = vlrepair(filename, cmpptr);
 OUTPUT:
     RETVAL
 
@@ -1539,10 +1406,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlexportdb( vlptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm export error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlexportdb( vlptr(db), filename );
 OUTPUT:
     RETVAL
 
@@ -1553,10 +1417,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vlimportdb( vlptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm import error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vlimportdb( vlptr(db), filename );
 OUTPUT:
     RETVAL
 
@@ -1585,7 +1446,7 @@ CODE:
         RETVAL->comparer = newSVsv(comparer);
     }
     else {
-        croak( "qdbm open error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1624,11 +1485,8 @@ CODE:
         RETVAL = newSVpvn(value, vsize);
         cbfree(value);
     }
-    else if ( !vstfatalerror( vstptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1651,7 +1509,7 @@ CODE:
     else if (QD_DUP  == flags) { dmode = VST_DDUP ; }
     else if (QD_DUPR == flags) { dmode = VST_DDUPR; }
     else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = (bool)vstput(
+    RETVAL = vstput(
         vstptr(db),
         SvPVbyte(key, ksize),
         ksize,
@@ -1659,9 +1517,6 @@ CODE:
         vsize,
         dmode
     );
-    if (!RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -1674,10 +1529,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vstout( vstptr(db), SvPVbyte(key, ksize), ksize );
-    if (!RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstout( vstptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -1692,7 +1544,7 @@ CODE:
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
     vsize = vstvsiz( vstptr(db), SvPVbyte(key, ksize), ksize );
-    RETVAL = (bool)(-1 != vsize);
+    RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
 
@@ -1707,14 +1559,16 @@ CODE:
     MY_CXT.comparer = db->comparer;
     if ( vstcurfirst( vstptr(db) ) ) {
         key = vstcurkey( vstptr(db), &ksize );
-        RETVAL = newSVpvn(key, ksize);
-        cbfree(key);
-    }
-    else if ( !vstfatalerror( vstptr(db) ) ) {
-        XSRETURN_UNDEF;
+        if (NULL != key) {
+            RETVAL = newSVpvn(key, ksize);
+            cbfree(key);
+        }
+        else {
+            XSRETURN_UNDEF;
+        }
     }
     else {
-        croak( "qdbm iterator init error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1734,18 +1588,12 @@ CODE:
             RETVAL = newSVpvn(key, ksize);
             cbfree(key);
         }
-        else if ( !vstfatalerror( vstptr(db) ) ) {
+        else {
             XSRETURN_UNDEF;
         }
-        else {
-            croak( "qdbm get key error: %s\n", dperrmsg(dpecode) );
-        }
-    }
-    else if ( !vstfatalerror( vstptr(db) ) ) {
-        XSRETURN_UNDEF;
     }
     else {
-        croak( "qdbm iterator error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -1790,10 +1638,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vstoutlist( vstptr(db), SvPVbyte(key, ksize), ksize );
-    if ( !RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstoutlist( vstptr(db), SvPVbyte(key, ksize), ksize );
 OUTPUT:
     RETVAL
 
@@ -1822,11 +1667,8 @@ PPCODE:
         }
         cblistclose(list);
     }
-    else if ( !vstfatalerror( vstptr(db) ) ) {
-        XSRETURN_UNDEF;
-    }
     else {
-        croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_EMPTY;
     }
 
 bool
@@ -1847,10 +1689,7 @@ CODE:
         cblistpush(list, SvPVbyte( ST(i), vsize ), vsize);
     }
     ksize = SvCUR(key);
-    RETVAL = (bool)vstputlist( vstptr(db), SvPVbyte(key, ksize), ksize, list );
-    if ( !RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstputlist( vstptr(db), SvPVbyte(key, ksize), ksize, list );
 OUTPUT:
     RETVAL
 CLEANUP:
@@ -1863,7 +1702,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstcurfirst( vstptr(db) );
+    RETVAL = vstcurfirst( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1874,7 +1713,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstcurfirst( vstptr(db) );
+    RETVAL = vstcurfirst( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1885,7 +1724,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstcurlast( vstptr(db) );
+    RETVAL = vstcurlast( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1896,7 +1735,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstcurnext( vstptr(db) );
+    RETVAL = vstcurnext( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1907,7 +1746,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstcurprev( vstptr(db) );
+    RETVAL = vstcurprev( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -1920,7 +1759,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vstcurjump( vstptr(db), SvPVbyte(key, ksize), ksize, VST_JFORWARD );
+    RETVAL = vstcurjump( vstptr(db), SvPVbyte(key, ksize), ksize, VST_JFORWARD );
 OUTPUT:
     RETVAL
 
@@ -1933,7 +1772,7 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     ksize = SvCUR(key);
-    RETVAL = (bool)vstcurjump( vstptr(db), SvPVbyte(key, ksize), ksize, VST_JBACKWARD );
+    RETVAL = vstcurjump( vstptr(db), SvPVbyte(key, ksize), ksize, VST_JBACKWARD );
 OUTPUT:
     RETVAL
 
@@ -1986,15 +1825,12 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     vsize = SvCUR(value);
-    RETVAL = (bool)vstcurput(
+    RETVAL = vstcurput(
         vstptr(db),
         SvPVbyte(value, vsize),
         vsize,
         VL_CPCURRENT
     );
-    if (!RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2007,15 +1843,12 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     vsize = SvCUR(value);
-    RETVAL = (bool)vstcurput(
+    RETVAL = vstcurput(
         vstptr(db),
         SvPVbyte(value, vsize),
         vsize,
         VL_CPAFTER
     );
-    if (!RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2028,15 +1861,12 @@ CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
     vsize = SvCUR(value);
-    RETVAL = (bool)vstcurput(
+    RETVAL = vstcurput(
         vstptr(db),
         SvPVbyte(value, vsize),
         vsize,
         VL_CPBEFORE
     );
-    if (!RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2047,10 +1877,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstcurout( vstptr(db) );
-    if (!RETVAL && vstfatalerror( vstptr(db) ) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstcurout( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -2062,30 +1889,21 @@ CODE:
 bool
 set_fbp_size(QDBM_File db, int size)
 CODE:
-    RETVAL = (bool)vstsetfbpsiz( vstptr(db), size );
-    if (!RETVAL) {
-        croak( "qdbm set_fbp_size error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstsetfbpsiz( vstptr(db), size );
 OUTPUT:
     RETVAL
 
 bool
 sync(QDBM_File db)
 CODE:
-    RETVAL = (bool)vstsync( vstptr(db) );
-    if (!RETVAL) {
-        croak( "qdbm sync error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstsync( vstptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 optimize(QDBM_File db)
 CODE:
-    RETVAL = (bool)vstoptimize( vstptr(db) );
-    if (!RETVAL) {
-        croak( "qdbm optimize error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstoptimize( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -2100,7 +1918,7 @@ CODE:
         cbfree(name);
     }
     else {
-        croak( "qdbm get_name error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -2109,9 +1927,6 @@ int
 get_size(QDBM_File db)
 CODE:
     RETVAL = vstfsiz( vstptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_size error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2119,9 +1934,6 @@ int
 count_leafs(QDBM_File db)
 CODE:
     RETVAL = vstlnum( vstptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_leafs error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2129,9 +1941,6 @@ int
 count_non_leafs(QDBM_File db)
 CODE:
     RETVAL = vstnnum( vstptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_non_leafs error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2139,23 +1948,27 @@ int
 count_records(QDBM_File db)
 CODE:
     RETVAL = vstrnum( vstptr(db) );
-    if (-1 == RETVAL) {
-        croak( "qdbm get_records error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
 bool
 is_writable(QDBM_File db)
 CODE:
-    RETVAL = (bool)vstwritable( vstptr(db) );
+    RETVAL = vstwritable( vstptr(db) );
+OUTPUT:
+    RETVAL
+
+const char*
+get_error(SV* package)
+CODE:
+    RETVAL = dperrmsg(dpecode);
 OUTPUT:
     RETVAL
 
 bool
 is_fatal_error(QDBM_File db)
 CODE:
-    RETVAL = (bool)vstfatalerror( vstptr(db) );
+    RETVAL = vstfatalerror( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -2169,21 +1982,21 @@ OUTPUT:
 bool
 begin_transaction(QDBM_File db)
 CODE:
-    RETVAL = (bool)vsttranbegin( vstptr(db) );
+    RETVAL = vsttranbegin( vstptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 commit(QDBM_File db)
 CODE:
-    RETVAL = (bool)vsttrancommit( vstptr(db) );
+    RETVAL = vsttrancommit( vstptr(db) );
 OUTPUT:
     RETVAL
 
 bool
 rollback(QDBM_File db)
 CODE:
-    RETVAL = (bool)vsttranabort( vstptr(db) );
+    RETVAL = vsttranabort( vstptr(db) );
 OUTPUT:
     RETVAL
 
@@ -2196,15 +2009,10 @@ CODE:
     cmpptr = SvOK(comparer) ? btree_compare : VST_CMPLEX;
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = comparer;
-    if ( sv_isobject(package) && sv_derived_from(package, "QDBM_File::BTree::Multiple") ) {
-        croak("qdbm repair error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm repair warning: called via instance method\n");
     }
-    else {
-        RETVAL = (bool)vstrepair(filename, cmpptr);
-        if (!RETVAL) {
-            croak( "qdbm repair error: %s\n", dperrmsg(dpecode) );
-        }
-    }
+    RETVAL = vstrepair(filename, cmpptr);
 OUTPUT:
     RETVAL
 
@@ -2215,10 +2023,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstexportdb( vstptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm export error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstexportdb( vstptr(db), filename );
 OUTPUT:
     RETVAL
 
@@ -2229,10 +2034,7 @@ PREINIT:
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    RETVAL = (bool)vstimportdb( vstptr(db), filename );
-    if (!RETVAL) {
-        croak( "qdbm import error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = vstimportdb( vstptr(db), filename );
 OUTPUT:
     RETVAL
 
@@ -2249,7 +2051,7 @@ CODE:
 
     RETVAL = odopen(filename, o_flags);
     if (NULL == RETVAL) {
-        croak( "qdbm open error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -2266,30 +2068,21 @@ CODE:
 bool
 store_document(ODEUM* db, ODDOC* doc, int max_words = -1, bool over = (bool)TRUE)
 CODE:
-    RETVAL = (bool)odput(db, doc, max_words, over);
-    if (!RETVAL) {
-        croak( "qdbm store error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = odput(db, doc, max_words, over);
 OUTPUT:
     RETVAL
 
 bool
 delete_document_by_uri(ODEUM* db, const char* uri)
 CODE:
-    RETVAL = (bool)odout(db, uri);
-    if ( !RETVAL && odfatalerror(db) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = odout(db, uri);
 OUTPUT:
     RETVAL
 
 bool
 delete_document_by_id(ODEUM* db, int id)
 CODE:
-    RETVAL = (bool)odoutbyid(db, id);
-    if ( !RETVAL && odfatalerror(db) ) {
-        croak( "qdbm delete error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = odoutbyid(db, id);
 OUTPUT:
     RETVAL
 
@@ -2298,12 +2091,7 @@ get_document_by_uri(ODEUM* db, const char* uri)
 CODE:
     RETVAL = odget(db, uri);
     if (NULL == RETVAL) {
-        if ( odfatalerror(db) ) {
-            croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
-        }
-        else {
-            XSRETURN_UNDEF;
-        }
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -2313,12 +2101,7 @@ get_document_by_id(ODEUM* db, int id)
 CODE:
     RETVAL = odgetbyid(db, id);
     if (NULL == RETVAL) {
-        if ( odfatalerror(db) ) {
-            croak( "qdbm fetch error: %s\n", dperrmsg(dpecode) );
-        }
-        else {
-            XSRETURN_UNDEF;
-        }
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -2327,28 +2110,20 @@ int
 get_document_id(ODEUM* db, const char* uri)
 CODE:
     RETVAL = odgetidbyuri(db, uri);
-    if (-1 == RETVAL) {
-        if ( odfatalerror(db) ) {
-            croak( "qdbm get_id error: %s\n", dperrmsg(dpecode) );
-        }
-        else {
-            XSRETURN_UNDEF;
-        }
-    }
 OUTPUT:
     RETVAL
 
 bool
 exists_document_by_uri(ODEUM* db, const char* uri)
 CODE:
-    RETVAL = (bool)( -1 != odgetidbyuri(db, uri) );
+    RETVAL = ( -1 != odgetidbyuri(db, uri) );
 OUTPUT:
     RETVAL
 
 bool
 exists_document_by_id(ODEUM* db, int id)
 CODE:
-    RETVAL = (bool)odcheck(db, id);
+    RETVAL = odcheck(db, id);
 OUTPUT:
     RETVAL
 
@@ -2374,19 +2149,13 @@ int
 search_document_count(ODEUM* db, const char* word)
 CODE:
     RETVAL = odsearchdnum(db, word);
-    if ( -1 == RETVAL && odfatalerror(db) ) {
-        croak( "qdbm search_document_count error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
 bool
 iterator_init(ODEUM* db)
 CODE:
-    RETVAL = (bool)oditerinit(db);
-    if (!RETVAL) {
-        croak( "qdbm iterator_init error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = oditerinit(db);
 OUTPUT:
     RETVAL
 
@@ -2395,12 +2164,7 @@ get_next_document(ODEUM* db)
 CODE:
     RETVAL = oditernext(db);
     if (NULL == RETVAL) {
-        if ( odfatalerror(db) ) {
-            croak( "qdbm get_next error: %s\n", dperrmsg(dpecode) );
-        }
-        else {
-            XSRETURN_UNDEF;
-        }
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -2408,20 +2172,14 @@ OUTPUT:
 bool
 sync(ODEUM* db)
 CODE:
-    RETVAL = (bool)odsync(db);
-    if (!RETVAL) {
-        croak( "qdbm sync error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = odsync(db);
 OUTPUT:
     RETVAL
 
 bool
 optimize(ODEUM* db)
 CODE:
-    RETVAL = (bool)odoptimize(db);
-    if (!RETVAL) {
-        croak( "qdbm optimize error: %s\n", dperrmsg(dpecode) );
-    }
+    RETVAL = odoptimize(db);
 OUTPUT:
     RETVAL
 
@@ -2436,7 +2194,7 @@ CODE:
         cbfree(name);
     }
     else {
-        croak( "qdbm get_name error: %s\n", dperrmsg(dpecode) );
+        XSRETURN_UNDEF;
     }
 OUTPUT:
     RETVAL
@@ -2445,9 +2203,6 @@ double
 get_size(ODEUM* db)
 CODE:
     RETVAL = odfsiz(db);
-    if (-1 == RETVAL) {
-        croak( "qdbm get_size error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2455,9 +2210,6 @@ int
 count_buckets(ODEUM* db)
 CODE:
     RETVAL = odbnum(db);
-    if (-1 == RETVAL) {
-        croak( "qdbm get_buckets error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2465,9 +2217,6 @@ int
 count_used_buckets(ODEUM* db)
 CODE:
     RETVAL = odbusenum(db);
-    if (-1 == RETVAL) {
-        croak( "qdbm get_used_buckets error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2475,9 +2224,6 @@ int
 count_documents(ODEUM* db)
 CODE:
     RETVAL = oddnum(db);
-    if (-1 == RETVAL) {
-        croak( "qdbm get_documents error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
@@ -2485,23 +2231,27 @@ int
 count_words(ODEUM* db)
 CODE:
     RETVAL = odwnum(db);
-    if (-1 == RETVAL) {
-        croak( "qdbm get_words error: %s\n", dperrmsg(dpecode) );
-    }
 OUTPUT:
     RETVAL
 
 bool
 is_writable(ODEUM* db)
 CODE:
-    RETVAL = (bool)odwritable(db);
+    RETVAL = odwritable(db);
 OUTPUT:
     RETVAL
 
 bool
 is_fatal_error(ODEUM* db)
 CODE:
-    RETVAL = (bool)odfatalerror(db);
+    RETVAL = odfatalerror(db);
+OUTPUT:
+    RETVAL
+
+const char*
+get_error(SV* package)
+CODE:
+    RETVAL = dperrmsg(dpecode);
 OUTPUT:
     RETVAL
 
@@ -2519,8 +2269,8 @@ PREINIT:
     int elemsize;
     CBLIST* elemnames;
 CODE:
-    if ( sv_isobject(package) && sv_derived_from(package, "QDBM_File::InvertedIndex") ) {
-        croak("qdbm merge error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm merge warning: called via instance method\n");
     }
     else {
         elemnames = cblistopen();
@@ -2528,10 +2278,7 @@ CODE:
             elemsize = SvCUR( ST(i) );
             cblistpush(elemnames, SvPVbyte( ST(i), elemsize ), elemsize);
         }
-        RETVAL = (bool)odmerge(name, elemnames);
-        if (!RETVAL) {
-            croak( "qdbm merge error: %s\n", dperrmsg(dpecode) );
-        }
+        RETVAL = odmerge(name, elemnames);
     }
 OUTPUT:
     RETVAL
@@ -2563,8 +2310,8 @@ PPCODE:
 void
 set_tuning(SV* package, int index_buckets, int inverted_index_division_num, int dirty_buffer_buckets, int dirty_buffer_size)
 CODE:
-    if ( sv_isobject(package) && sv_derived_from(package, "QDBM_File::InvertedIndex") ) {
-        croak("qdbm break_text error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm set_tuning warning: called via instance method\n");
     }
     else {
         odsettuning(
@@ -2613,8 +2360,8 @@ normalize_word(SV* package, const char* asis)
 PREINIT:
     char* normalized_word;
 CODE:
-    if ( sv_isobject(package) && sv_derived_from(package, "QDBM_File::InvertedIndex") ) {
-        croak("qdbm normalize_word error: called via instance method\n");
+    if ( sv_isobject(package) ) {
+        warn("qdbm normalize_word warning: called via instance method\n");
     }
     else {
         normalized_word = odnormalizeword(asis);
@@ -2639,15 +2386,17 @@ PPCODE:
     errors = cblistopen();
     pair = odquery(db, query, &length, errors);
     if (NULL == pair) {
-        errsv = newSVpv("qdbm query error:\n", 0);
+        errsv = newSVpvn("", 0);
         SAVEMORTALIZESV(errsv);
         for (i = 0; i < cblistnum(errors); i++) {
             value = cblistval(errors, i, &vsize);
+            sv_catpv(errsv, "qdbm query warning: ");
             sv_catpv(errsv, value);
             sv_catpv(errsv, "\n");
         }
         cblistclose(errors);
-        croak( SvPV_nolen(errsv) );
+        warn( SvPV_nolen(errsv) );
+        XSRETURN_EMPTY;
     }
     else {
         for (i = 0; i < length; i++) {

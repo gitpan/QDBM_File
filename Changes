@@ -1,5 +1,11 @@
 Revision history for QDBM_File
 
+0.05    Tue Dec 11 21:49:34 2007
+        * Added method: get_error()
+        * Fixed QDBM_File.pm: Fixed typo in get_scores()
+        * Changed QDBM_File.xs: Deleted error message. Use get_error() instead.
+        * Changed QDBM_File.xs: FETCH() receives start/offset arguments
+
 0.04    Wed Dec 5 19:01:58 2007
         * Fixed QDBM_File.xs: Improved backward compatibility
           Added #define NEED_sv_2pvbyte for 5.6.1

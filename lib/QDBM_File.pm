@@ -3,7 +3,7 @@ package QDBM_File;
 use strict;
 
 BEGIN {
-    our $VERSION = '0.04';
+    our $VERSION = '0.05';
     require XSLoader;
     XSLoader::load(__PACKAGE__, $VERSION);
 }
@@ -26,7 +26,7 @@ package QDBM_File::InvertedIndex;
 
 sub get_scores {
     my $self = shift;
-    return wantarray ? $self->_get_scores(@_) : { $self->get_scores(@_) };
+    return wantarray ? $self->_get_scores(@_) : { $self->_get_scores(@_) };
 }
 
 sub create_document {
@@ -38,7 +38,7 @@ package QDBM_File::InvertedIndex::Document;
 
 sub get_scores {
     my $self = shift;
-    return wantarray ? $self->_get_scores(@_) : { $self->get_scores(@_) };
+    return wantarray ? $self->_get_scores(@_) : { $self->_get_scores(@_) };
 }
 
 1;
@@ -79,6 +79,7 @@ QDBM_File - Tied access to Quick Database Manager
     $bool = $db->iterator_init();
     $bool = $db->is_writable();
     $bool = $db->is_fatal_error();
+    $msg  = $db->get_error();
 
     # hash db, btree common api
     $bool = $db->STORE($key, $value, [$overlap_flags]);
@@ -89,10 +90,11 @@ QDBM_File - Tied access to Quick Database Manager
     $bool = $db->import_db($filename);
 
     # hash db only
-    $bool = $db->set_align($align);
-    $bool = $db->set_fbp_size($size);
-    $int  = $db->count_buckets();
-    $int  = $db->count_used_buckets();
+    $value = $db->FETCH($key, [$start, $offset]);
+    $bool  = $db->set_align($align);
+    $bool  = $db->set_fbp_size($size);
+    $int   = $db->count_buckets();
+    $int   = $db->count_used_buckets();
 
     # Large Object: QDBM_File::Multiple only
     $bool  = $db->store_lob($key, $value, [$overlap_flags]);
@@ -145,7 +147,7 @@ QDBM_File - Tied access to Quick Database Manager
 
     # inverted index api
     $doc  = $class->create_document($uri);
-    $bool = $db->store_document($doc, $max_words, $is_overwrite);
+    $bool = $db->store_document($doc, [$max_words, $is_overwrite]);
 
     $doc  = $db->get_document_by_uri($uri);
     $doc  = $db->get_document_by_id($id);
@@ -256,13 +258,13 @@ If $compare_sub is omitted, dictionary order is used.
 If using STORE as method, $overlap_flags can be used. If omitted,
 QD_OVER is used.
 
-    $db->STORE("key", "balue", QD_CAT);
+    $db->STORE("key", "value", QD_CAT);
 
 =back
 
 =head1 AUTHOR
 
-Toshiyuki Yamato, C<< <toshiyuki.yamato at gmail.com> >>
+Toshiyuki Yamato, C<< <toshiyuki.yamato@gmail.com> >>
 
 =head1 BUGS AND WARNINGS
 

@@ -3,7 +3,7 @@
 # QDBM_File test script based on DB_File - db_hash.t
 
 use strict;
-use Test::More tests => 51;
+use Test::More tests => 54;
 use Fcntl;
 use File::Path;
 use File::Spec;
@@ -42,6 +42,10 @@ ok( exists $tie{'abc'} );
 is( $tie{'abc'}, 'ABC' );
 ok( !exists $tie{'def'} );
 ok( !defined $tie{'def'} );
+
+is( $db->FETCH('abc', 0, 1), "A" );
+is( $db->FETCH('abc', 1, 1), "B" );
+is( $db->FETCH('abc', 2, 1), "C" );
 
 $tie{'abc'} = "Null \0 Value";
 is( $tie{'abc'}, "Null \0 Value" );
