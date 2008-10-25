@@ -69,7 +69,7 @@ is( scalar(@doc_id2), 0 );
 
 is( $db->search_document_count("more"), 1 );
 
-ok( $db->iterator_init() );
+ok( $db->init_iterator() );
 my $doc3 = $db->get_next_document();
 isa_ok($doc3, "QDBM_File::InvertedIndex::Document");
 is( $doc3->get_id(), $doc->get_id() );

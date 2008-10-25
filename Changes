@@ -1,9 +1,22 @@
 Revision history for QDBM_File
 
+1.00    Sun Oct 26 06:57:35 2008
+        * QDBM_File::Multiple::LOB is obsoleted. Use store_lob(), fetch_lob(),
+          delete_lob(), exists_lob() instead.
+        * Added method: new(), store_keep(), store_cat(), store_dup(),
+          store_dupr(), store_keep_lob(), store_cat_lob()
+        * Changed iterator_init() to init_iterator()
+        * Overlap flags (QD_xxxx) is obsoleted.
+        * CLEAR() implemented
+        * SCALAR() implemented
+        * Makefile.PL asks static or dynamic link
+        * Changed tests: skip repair() test
+        * ppport.h version 3.14
+
 0.05    Tue Dec 11 21:49:34 2007
         * Added method: get_error()
         * Fixed QDBM_File.pm: Fixed typo in get_scores()
-        * Changed QDBM_File.xs: Deleted error message. Use get_error() instead.
+        * Changed QDBM_File.xs: Deleted error messages. Use get_error() instead.
         * Changed QDBM_File.xs: FETCH() receives start/offset arguments
 
 0.04    Wed Dec 5 19:01:58 2007

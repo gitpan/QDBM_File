@@ -1,4 +1,4 @@
-QDBM_File 0.05
+QDBM_File 1.00
 
 QDBM_File is a module which allows Perl programs to make use of the
 facilities provided by the qdbm library. If you use this module, you
@@ -27,7 +27,7 @@ If you built QDBM on Windows, change -lqdbm to -lqdbm_t_static etc.
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2007 Toshiyuki Yamato <toshiyuki.yamato@gmail.com>
+Copyright (C) 2007-2008 Toshiyuki Yamato <toshiyuki.yamato@gmail.com>
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

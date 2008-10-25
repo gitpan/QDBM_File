@@ -3,7 +3,7 @@
 # QDBM_File::Multiple test script based on DB_File - db_hash.t
 
 use strict;
-use Test::More tests => 54;
+use Test::More tests => 62;
 use Fcntl;
 use File::Path;
 use File::Spec;
@@ -101,12 +101,17 @@ ok( $tie{''} eq 'empty key' );
 count_ok(8);
 
 $tie{'cattest'} = "CAT";
-$db->STORE('cattest', "TEST", QD_CAT);
+$db->store_cat('cattest', "TEST");
 is( $tie{'cattest'}, "CATTEST" );
 
-my $stat = eval { $db->STORE('cattest', "KEEP", QD_KEEP); };
+my $stat = eval { $db->store_keep('keeptest', "KEEP"); };
+ok($stat);
+is( $tie{'keeptest'}, "KEEP" );
+$stat = eval { $db->store_keep('keeptest', "KEEP2"); };
 ok(!$stat);
+is( $tie{'keeptest'}, "KEEP" );
 
+ok(QDBM_File::Multiple->get_error);
 ok(!$db->is_fatal_error);
 ok($db->get_name =~ /db_hash_multi_test/);
 ok($db->get_mtime);
@@ -116,7 +121,7 @@ ok(0 < eval { $db->count_used_buckets; });
 ok(0 < eval { $db->count_records; });
 ok($db->is_writable);
 ok(0 < eval { $db->get_size; });
-ok($db->iterator_init);
+ok($db->init_iterator);
 ok(eval { $db->sync; });
 ok(eval { $db->optimize; });
 
@@ -126,7 +131,10 @@ ok(eval { $db->export_db($temp_export); });
 undef $db;
 untie %tie;
 
-ok( $class->repair($tempfile) );
+SKIP: {
+    skip q(I don't know how create crashed file), 1;
+    ok( $class->repair($tempfile) );
+}
 
 $db = tie %tie, $class, $tempfile, O_RDWR|O_CREAT|O_TRUNC, 0640;
 count_ok(0);
@@ -158,5 +166,14 @@ is( $fetch_value, 'filter_value' );
 my $next_key = $db->FIRSTKEY;
 is( $fetch_key, $next_key );
 
+ok( scalar(%tie) );
+%tie = ();
+ok( !scalar(%tie) );
+count_ok(0);
+
 undef $db;
 untie %tie;
+
+my $db2 = $class->new($tempfile, O_RDWR|O_CREAT, 0640);
+isa_ok($db2, $class);
+undef $db2;

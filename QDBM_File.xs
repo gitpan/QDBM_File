@@ -30,10 +30,12 @@
             db_type = NULL;                         \
         }                                           \
         else if (code) {                            \
-            if (db_type)                            \
+            if (db_type) {                          \
                 sv_setsv(db_type, code);            \
-            else                                    \
+            }                                       \
+            else {                                  \
                 db_type = newSVsv(code);            \
+            }                                       \
         }                                           \
     } STMT_END
 #endif
@@ -88,14 +90,6 @@ typedef SV* datum_value;
 #define vlptr(db)  ( (VILLA*)db->dbp )
 #define vstptr(db) ( (VISTA*)db->dbp )
 
-enum {
-  QD_OVER,
-  QD_KEEP,
-  QD_CAT,
-  QD_DUP,
-  QD_DUPR
-};
-
 /* define static data for btree comparer */
 #define MY_CXT_KEY "QDBM_File::_guts" XS_VERSION
 
@@ -105,7 +99,26 @@ typedef struct {
 
 START_MY_CXT
 
-int btree_compare(const char* key_a, int ksize_a, const char* key_b, int ksize_b) {
+#define DEF_QDBM_STORE(FUNCNAME, PUTFUNC, DBPTR) \
+static int FUNCNAME(QDBM_File db, datum_key key, datum_value value, int dmode); \
+static int FUNCNAME(QDBM_File db, datum_key key, datum_value value, int dmode) { \
+    int ksize; \
+    int vsize; \
+    ksize = SvCUR(key); \
+    vsize = SvCUR(value); \
+    return PUTFUNC( DBPTR(db), SvPVbyte(key, ksize), ksize, SvPVbyte(value, vsize), vsize, dmode ); \
+}
+
+DEF_QDBM_STORE(store_dp, dpput, dpptr)
+DEF_QDBM_STORE(store_cr, crput, crptr)
+DEF_QDBM_STORE(store_crlob, crputlob, crptr)
+DEF_QDBM_STORE(store_vl, vlput, vlptr)
+DEF_QDBM_STORE(store_vst, vstput, vstptr)
+
+#undef DEF_QDBM_STORE_FUNC
+
+static int btree_compare(const char* key_a, int ksize_a, const char* key_b, int ksize_b);
+static int btree_compare(const char* key_a, int ksize_a, const char* key_b, int ksize_b) {
 
     int count;
     int retval;
@@ -142,21 +155,16 @@ MODULE = QDBM_File    PACKAGE = QDBM_File
 
 BOOT:
 {
-    HV* stash;
     MY_CXT_INIT;
     MY_CXT.comparer = &PL_sv_undef;
-    stash = gv_stashpv("QDBM_File", TRUE);
-    newCONSTSUB( stash, "QD_OVER", newSViv(QD_OVER) );
-    newCONSTSUB( stash, "QD_KEEP", newSViv(QD_KEEP) );
-    newCONSTSUB( stash, "QD_CAT",  newSViv(QD_CAT)  );
-    newCONSTSUB( stash, "QD_DUP",  newSViv(QD_DUP)  );
-    newCONSTSUB( stash, "QD_DUPR", newSViv(QD_DUPR) );
 }
 
 INCLUDE: dbm_filter.xsh
 
 QDBM_File
 TIEHASH(char* dbtype, char* filename, int flags = O_CREAT|O_RDWR, int mode = 0644, int buckets = -1)
+ALIAS:
+    new = 1
 PREINIT:
     DEPOT* dbp;
     int o_flags;
@@ -215,26 +223,23 @@ OUTPUT:
     RETVAL
 
 bool
-STORE(QDBM_File db, datum_key key, datum_value value, int flags = QD_OVER)
-PREINIT:
-    int ksize;
-    int vsize;
-    int dmode;
+STORE(QDBM_File db, datum_key key, datum_value value)
 CODE:
-    ksize = SvCUR(key);
-    vsize = SvCUR(value);
-    if      (QD_OVER == flags) { dmode = DP_DOVER; }
-    else if (QD_KEEP == flags) { dmode = DP_DKEEP; }
-    else if (QD_CAT  == flags) { dmode = DP_DCAT ; }
-    else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = dpput(
-        dpptr(db),
-        SvPVbyte(key, ksize),
-        ksize,
-        SvPVbyte(value, vsize),
-        vsize,
-        dmode
-    );
+    RETVAL = store_dp(db, key, value, DP_DOVER);
+OUTPUT:
+    RETVAL
+
+bool
+store_keep(QDBM_File db, datum_key key, datum_value value)
+CODE:
+    RETVAL = store_dp(db, key, value, DP_DKEEP);
+OUTPUT:
+    RETVAL
+
+bool
+store_cat(QDBM_File db, datum_key key, datum_value value)
+CODE:
+    RETVAL = store_dp(db, key, value, DP_DCAT);
 OUTPUT:
     RETVAL
 
@@ -299,11 +304,6 @@ CODE:
 OUTPUT:
     RETVAL
 
-void
-CLEAR(QDBM_File db)
-CODE:
-    croak("qdbm clear error: method not implemented\n");
-
 bool
 set_align(QDBM_File db, int align)
 CODE:
@@ -343,7 +343,7 @@ OUTPUT:
     RETVAL
 
 bool
-iterator_init(QDBM_File db)
+init_iterator(QDBM_File db)
 CODE:
     RETVAL = dpiterinit( dpptr(db) );
 OUTPUT:
@@ -388,6 +388,8 @@ OUTPUT:
 
 int
 count_records(QDBM_File db)
+ALIAS:
+    SCALAR = 1
 CODE:
     RETVAL = dprnum( dpptr(db) );
 OUTPUT:
@@ -451,6 +453,8 @@ INCLUDE: dbm_filter.xsh
 
 QDBM_File
 TIEHASH(char* dbtype, char* filename, int flags = O_CREAT|O_RDWR, int mode = 0644, int buckets = -1, int directories = -1)
+ALIAS:
+    new = 1
 PREINIT:
     CURIA* dbp;
     int o_flags;
@@ -507,26 +511,23 @@ OUTPUT:
     RETVAL
 
 bool
-STORE(QDBM_File db, datum_key key, datum_value value, int flags = QD_OVER)
-PREINIT:
-    int ksize;
-    int vsize;
-    int dmode;
+STORE(QDBM_File db, datum_key key, datum_value value)
 CODE:
-    ksize = SvCUR(key);
-    vsize = SvCUR(value);
-    if      (QD_OVER == flags) { dmode = CR_DOVER; }
-    else if (QD_KEEP == flags) { dmode = CR_DKEEP; }
-    else if (QD_CAT  == flags) { dmode = CR_DCAT ; }
-    else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = crput(
-        crptr(db),
-        SvPVbyte(key, ksize),
-        ksize,
-        SvPVbyte(value, vsize),
-        vsize,
-        dmode
-    );
+    RETVAL = store_cr(db, key, value, CR_DOVER);
+OUTPUT:
+    RETVAL
+
+bool
+store_keep(QDBM_File db, datum_key key, datum_value value)
+CODE:
+    RETVAL = store_cr(db, key, value, CR_DKEEP);
+OUTPUT:
+    RETVAL
+
+bool
+store_cat(QDBM_File db, datum_key key, datum_value value)
+CODE:
+    RETVAL = store_cr(db, key, value, CR_DCAT);
 OUTPUT:
     RETVAL
 
@@ -630,7 +631,7 @@ OUTPUT:
     RETVAL
 
 bool
-iterator_init(QDBM_File db)
+init_iterator(QDBM_File db)
 CODE:
     RETVAL = criterinit( crptr(db) );
 OUTPUT:
@@ -675,6 +676,8 @@ OUTPUT:
 
 int
 count_records(QDBM_File db)
+ALIAS:
+    SCALAR = 1
 CODE:
     RETVAL = crrnum( crptr(db) );
 OUTPUT:
@@ -733,14 +736,14 @@ OUTPUT:
     RETVAL
 
 datum_value
-fetch_lob(QDBM_File db, datum_key key)
+fetch_lob(QDBM_File db, datum_key key, int start = 0, int offset = -1)
 PREINIT:
     int ksize;
     int vsize;
     char* value;
 CODE:
     ksize = SvCUR(key);
-    value = crgetlob( crptr(db), SvPVbyte(key, ksize), ksize, 0, -1, &vsize );
+    value = crgetlob( crptr(db), SvPVbyte(key, ksize), ksize, start, offset, &vsize );
     if (NULL != value) {
         RETVAL = newSVpvn(value, vsize);
         cbfree(value);
@@ -752,26 +755,23 @@ OUTPUT:
     RETVAL
 
 bool
-store_lob(QDBM_File db, datum_key key, datum_value value, int flags = QD_OVER)
-PREINIT:
-    int ksize;
-    int vsize;
-    int dmode;
+store_lob(QDBM_File db, datum_key key, datum_value value)
 CODE:
-    ksize = SvCUR(key);
-    vsize = SvCUR(value);
-    if      (QD_OVER == flags) { dmode = CR_DOVER; }
-    else if (QD_KEEP == flags) { dmode = CR_DKEEP; }
-    else if (QD_CAT  == flags) { dmode = CR_DCAT ; }
-    else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = crputlob(
-        crptr(db),
-        SvPVbyte(key, ksize),
-        ksize,
-        SvPVbyte(value, vsize),
-        vsize,
-        dmode
-    );
+    RETVAL = store_crlob(db, key, value, CR_DOVER);
+OUTPUT:
+    RETVAL
+
+bool
+store_keep_lob(QDBM_File db, datum_key key, datum_value value)
+CODE:
+    RETVAL = store_crlob(db, key, value, CR_DKEEP);
+OUTPUT:
+    RETVAL
+
+bool
+store_cat_lob(QDBM_File db, datum_key key, datum_value value)
+CODE:
+    RETVAL = store_crlob(db, key, value, CR_DCAT);
 OUTPUT:
     RETVAL
 
@@ -810,6 +810,8 @@ INCLUDE: dbm_filter.xsh
 
 QDBM_File
 TIEHASH(char* dbtype, char* filename, int flags = O_CREAT|O_RDWR, int mode = 0644, SV* comparer = &PL_sv_undef)
+ALIAS:
+    new = 1
 PREINIT:
     VILLA* dbp;
     int o_flags;
@@ -875,31 +877,57 @@ OUTPUT:
     RETVAL
 
 bool
-STORE(QDBM_File db, datum_key key, datum_value value, int flags = QD_OVER)
+STORE(QDBM_File db, datum_key key, datum_value value)
 PREINIT:
-    int ksize;
-    int vsize;
-    int dmode;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    vsize = SvCUR(value);
-    if      (QD_OVER == flags) { dmode = VL_DOVER; }
-    else if (QD_KEEP == flags) { dmode = VL_DKEEP; }
-    else if (QD_CAT  == flags) { dmode = VL_DCAT ; }
-    else if (QD_DUP  == flags) { dmode = VL_DDUP ; }
-    else if (QD_DUPR == flags) { dmode = VL_DDUPR; }
-    else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = vlput(
-        vlptr(db),
-        SvPVbyte(key, ksize),
-        ksize,
-        SvPVbyte(value, vsize),
-        vsize,
-        dmode
-    );
+    RETVAL = store_vl(db, key, value, VL_DOVER);
+OUTPUT:
+    RETVAL
+
+bool
+store_keep(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vl(db, key, value, VL_DKEEP);
+OUTPUT:
+    RETVAL
+
+bool
+store_cat(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vl(db, key, value, VL_DCAT);
+OUTPUT:
+    RETVAL
+
+bool
+store_dup(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vl(db, key, value, VL_DDUP);
+OUTPUT:
+    RETVAL
+
+bool
+store_dupr(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vl(db, key, value, VL_DDUPR);
 OUTPUT:
     RETVAL
 
@@ -980,11 +1008,6 @@ CODE:
     }
 OUTPUT:
     RETVAL
-
-void
-CLEAR(QDBM_File db)
-CODE:
-    croak("qdbm clear error: method not implemented\n");
 
 int
 get_record_size(QDBM_File db, datum_key key)
@@ -1079,7 +1102,7 @@ CLEANUP:
     cblistclose(list);
 
 bool
-iterator_init(QDBM_File db)
+init_iterator(QDBM_File db)
 PREINIT:
     dMY_CXT;
 CODE:
@@ -1329,6 +1352,8 @@ OUTPUT:
 
 int
 count_records(QDBM_File db)
+ALIAS:
+    SCALAR = 1
 CODE:
     RETVAL = vlrnum( vlptr(db) );
 OUTPUT:
@@ -1427,6 +1452,8 @@ INCLUDE: dbm_filter.xsh
 
 QDBM_File
 TIEHASH(char* dbtype, char* filename, int flags = O_CREAT|O_RDWR, int mode = 0644, SV* comparer = &PL_sv_undef)
+ALIAS:
+    new = 1
 PREINIT:
     VISTA* dbp;
     int o_flags;
@@ -1492,31 +1519,57 @@ OUTPUT:
     RETVAL
 
 bool
-STORE(QDBM_File db, datum_key key, datum_value value, int flags = QD_OVER)
+STORE(QDBM_File db, datum_key key, datum_value value)
 PREINIT:
-    int ksize;
-    int vsize;
-    int dmode;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    vsize = SvCUR(value);
-    if      (QD_OVER == flags) { dmode = VST_DOVER; }
-    else if (QD_KEEP == flags) { dmode = VST_DKEEP; }
-    else if (QD_CAT  == flags) { dmode = VST_DCAT ; }
-    else if (QD_DUP  == flags) { dmode = VST_DDUP ; }
-    else if (QD_DUPR == flags) { dmode = VST_DDUPR; }
-    else { croak("qdbm store error: unknown overlap flags\n"); }
-    RETVAL = vstput(
-        vstptr(db),
-        SvPVbyte(key, ksize),
-        ksize,
-        SvPVbyte(value, vsize),
-        vsize,
-        dmode
-    );
+    RETVAL = store_vst(db, key, value, VST_DOVER);
+OUTPUT:
+    RETVAL
+
+bool
+store_keep(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vst(db, key, value, VST_DKEEP);
+OUTPUT:
+    RETVAL
+
+bool
+store_cat(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vst(db, key, value, VST_DCAT);
+OUTPUT:
+    RETVAL
+
+bool
+store_dup(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vst(db, key, value, VST_DDUP);
+OUTPUT:
+    RETVAL
+
+bool
+store_dupr(QDBM_File db, datum_key key, datum_value value)
+PREINIT:
+    dMY_CXT;
+CODE:
+    SAVESPTR(MY_CXT.comparer);
+    MY_CXT.comparer = db->comparer;
+    RETVAL = store_vst(db, key, value, VST_DDUPR);
 OUTPUT:
     RETVAL
 
@@ -1597,11 +1650,6 @@ CODE:
     }
 OUTPUT:
     RETVAL
-
-void
-CLEAR(QDBM_File db)
-CODE:
-    croak("qdbm clear error: method not implemented\n");
 
 int
 get_record_size(QDBM_File db, datum_key key)
@@ -1696,7 +1744,7 @@ CLEANUP:
     cblistclose(list);
 
 bool
-iterator_init(QDBM_File db)
+init_iterator(QDBM_File db)
 PREINIT:
     dMY_CXT;
 CODE:
@@ -1946,6 +1994,8 @@ OUTPUT:
 
 int
 count_records(QDBM_File db)
+ALIAS:
+    SCALAR = 1
 CODE:
     RETVAL = vstrnum( vstptr(db) );
 OUTPUT:
@@ -2153,7 +2203,7 @@ OUTPUT:
     RETVAL
 
 bool
-iterator_init(ODEUM* db)
+init_iterator(ODEUM* db)
 CODE:
     RETVAL = oditerinit(db);
 OUTPUT:
@@ -2322,7 +2372,8 @@ CODE:
         );
     }
 
-void set_char_class(ODEUM* db, const char* space, const char* delimiter, const char* glue)
+void
+set_char_class(ODEUM* db, const char* space, const char* delimiter, const char* glue)
 CODE:
     odsetcharclass(db, space, delimiter, glue);
 
