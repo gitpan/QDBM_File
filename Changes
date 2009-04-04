@@ -1,5 +1,8 @@
 Revision history for QDBM_File
 
+1.10    Sat Apr 4 11:14:29 2009
+		* Possible to work with DBM_Filter.pm
+
 1.00    Sun Oct 26 06:57:35 2008
         * QDBM_File::Multiple::LOB is obsoleted. Use store_lob(), fetch_lob(),
           delete_lob(), exists_lob() instead.

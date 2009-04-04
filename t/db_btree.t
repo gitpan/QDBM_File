@@ -3,7 +3,7 @@
 # QDBM_File::BTree test script based on DB_File - db_btree.t
 
 use strict;
-use Test::More tests => 108;
+use Test::More tests => 109;
 use Fcntl;
 use File::Path;
 use File::Spec;
@@ -97,6 +97,7 @@ $tie{''} = 'empty key';
 ok( $tie{''} eq 'empty key' );
 
 count_ok(8);
+is( scalar(%tie), 8 );
 
 $tie{'cattest'} = "CAT";
 $db->store_cat('cattest', "TEST");

@@ -3,7 +3,7 @@
 # QDBM_File::BTree::Multiple test script based on DB_File - db_btree.t
 
 use strict;
-use Test::More tests => 108;
+use Test::More tests => 109;
 use Fcntl;
 use File::Path;
 use File::Spec;
@@ -97,6 +97,7 @@ $tie{''} = 'empty key';
 ok( $tie{''} eq 'empty key' );
 
 count_ok(8);
+is( scalar(%tie), 8 );
 
 $tie{'cattest'} = "CAT";
 $db->store_cat('cattest', "TEST");
@@ -131,7 +132,7 @@ undef $db;
 untie %tie;
 
 SKIP: {
-    skip q(I don't know how create crashed file), 1;
+    skip q(I don't know how to create crashed file), 1;
     ok( $class->repair($tempfile, $compare) );
 }
 

@@ -4,13 +4,18 @@ use strict;
 
 BEGIN {
 
-    our $VERSION = "1.00";
+    our $VERSION = "1.10";
 
-    eval {require XSLoader};
+    # For DBM_Filter: Inheriting only, not load Tie::Hash
+    our @ISA = qw(Tie::Hash);
+
+    eval {
+        require XSLoader;
+    };
 
     if ($@) {
         require DynaLoader;
-        our @ISA = qw(DynaLoader);
+        push @ISA, qw(DynaLoader);
         __PACKAGE__->bootstrap($VERSION);
     }
     else {
@@ -19,7 +24,7 @@ BEGIN {
 
 }
 
-# borrowed from Tie::Hash
+# Borrowed from Tie::Hash
 
 sub CLEAR {
 
@@ -38,9 +43,20 @@ sub CLEAR {
 
 }
 
-*QDBM_File::Multiple::CLEAR        = \&CLEAR;
-*QDBM_File::BTree::CLEAR           = \&CLEAR;
-*QDBM_File::BTree::Multiple::CLEAR = \&CLEAR;
+BEGIN {
+
+    foreach my $pkg (
+    	'QDBM_File::Multiple',
+    	'QDBM_File::BTree',
+    	'QDBM_File::BTree::Multiple'
+    )
+    {
+        no strict 'refs';
+        push @{$pkg . '::ISA'}, qw(Tie::Hash);
+        *{$pkg . '::CLEAR'} = \&CLEAR;
+    }
+
+}
 
 package QDBM_File::InvertedIndex;
 
@@ -395,7 +411,7 @@ Set size of database alignment.
 
 =item $db-E<gt>set_fbp_size($size)
 
-Set size of free block pool. Default is 16.
+Set size of free block pool. Default is C<16>.
 
 =item $db-E<gt>count_buckets()
 
