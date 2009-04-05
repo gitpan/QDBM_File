@@ -4,7 +4,12 @@ use strict;
 
 BEGIN {
 
-    our $VERSION = "1.10";
+    our $VERSION = "1.11";
+
+    # Make package
+    {
+        package Tie::Hash;
+    }
 
     # For DBM_Filter: Inheriting only, not load Tie::Hash
     our @ISA = qw(Tie::Hash);
@@ -46,9 +51,9 @@ sub CLEAR {
 BEGIN {
 
     foreach my $pkg (
-    	'QDBM_File::Multiple',
-    	'QDBM_File::BTree',
-    	'QDBM_File::BTree::Multiple'
+        'QDBM_File::Multiple',
+        'QDBM_File::BTree',
+        'QDBM_File::BTree::Multiple'
     )
     {
         no strict 'refs';
@@ -849,7 +854,7 @@ L<DB_File>, L<perldbmfilter>.
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2007-2008 Toshiyuki Yamato, all rights reserved.
+Copyright 2007-2009 Toshiyuki Yamato, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
