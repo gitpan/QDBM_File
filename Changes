@@ -1,5 +1,10 @@
 Revision history for QDBM_File
 
+1.12    Sat Apr 25 11:44:31 2009
+        * Fixed typemap: Added SvGETMAGIC
+        * ppport.h version 3.17
+        * Changed SvPVbyte to SvPV_const
+
 1.11    Sun Apr 5 10:36:36 2009
         * Added Tie::Hash package declaration to quiet warnings
 

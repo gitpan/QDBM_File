@@ -3,7 +3,8 @@
 #include "XSUB.h"
 
 /* for 5.6.1 */
-#define NEED_sv_2pvbyte
+/* #define NEED_sv_2pvbyte */
+#define NEED_sv_2pv_flags
 #include "ppport.h"
 
 #include "depot.h"
@@ -102,11 +103,13 @@ START_MY_CXT
 #define DEF_QDBM_STORE(FUNCNAME, PUTFUNC, DBPTR) \
 static int FUNCNAME(QDBM_File db, datum_key key, datum_value value, int dmode); \
 static int FUNCNAME(QDBM_File db, datum_key key, datum_value value, int dmode) { \
-    int ksize; \
-    int vsize; \
-    ksize = SvCUR(key); \
-    vsize = SvCUR(value); \
-    return PUTFUNC( DBPTR(db), SvPVbyte(key, ksize), ksize, SvPVbyte(value, vsize), vsize, dmode ); \
+    STRLEN ksize; \
+    STRLEN vsize; \
+    const char* kbyte; \
+    const char* vbyte; \
+    kbyte = SvPV_const(key, ksize); \
+    vbyte = SvPV_const(value, vsize); \
+    return PUTFUNC( DBPTR(db), kbyte, (int)ksize, vbyte, (int)vsize, dmode ); \
 }
 
 DEF_QDBM_STORE(store_dp, dpput, dpptr)
@@ -129,8 +132,8 @@ static int btree_compare(const char* key_a, int ksize_a, const char* key_b, int 
     SAVETMPS;
     PUSHMARK(SP);
 
-    XPUSHs( sv_2mortal( newSVpvn(key_a, ksize_a) ) );
-    XPUSHs( sv_2mortal( newSVpvn(key_b, ksize_b) ) );
+    XPUSHs( sv_2mortal( newSVpvn(key_a, (STRLEN)ksize_a) ) );
+    XPUSHs( sv_2mortal( newSVpvn(key_b, (STRLEN)ksize_b) ) );
 
     PUTBACK;
 
@@ -206,14 +209,15 @@ CODE:
 datum_value
 FETCH(QDBM_File db, datum_key key, int start = 0, int offset = -1)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     char* value;
 CODE:
-    ksize = SvCUR(key);
-    value = dpget( dpptr(db), SvPVbyte(key, ksize), ksize, start, offset, &vsize );
+    kbyte = SvPV_const(key, ksize);
+    value = dpget( dpptr(db), kbyte, (int)ksize, start, offset, &vsize );
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -246,21 +250,23 @@ OUTPUT:
 bool
 DELETE(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
 CODE:
-    ksize = SvCUR(key);
-    RETVAL = dpout( dpptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = dpout( dpptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 EXISTS(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
 CODE:
-    ksize = SvCUR(key);
-    vsize = dpvsiz( dpptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    vsize = dpvsiz( dpptr(db), kbyte, (int)ksize );
     RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
@@ -274,7 +280,7 @@ CODE:
     if ( dpiterinit( dpptr(db) ) ) {
         key = dpiternext( dpptr(db), &ksize );
         if (NULL != key) {
-            RETVAL = newSVpvn(key, ksize);
+            RETVAL = newSVpvn(key, (STRLEN)ksize);
             cbfree(key);
         }
         else {
@@ -295,7 +301,7 @@ PREINIT:
 CODE:
     key = dpiternext( dpptr(db), &ksize );
     if (NULL != key) {
-        RETVAL = newSVpvn(key, ksize);
+        RETVAL = newSVpvn(key, (STRLEN)ksize);
         cbfree(key);
     }
     else {
@@ -335,10 +341,11 @@ OUTPUT:
 int
 get_record_size(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
 CODE:
-    ksize = SvCUR(key);
-    RETVAL = dpvsiz( dpptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = dpvsiz( dpptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
@@ -494,14 +501,15 @@ CODE:
 datum_value
 FETCH(QDBM_File db, datum_key key, int start = 0, int offset = -1)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     char* value;
 CODE:
-    ksize = SvCUR(key);
-    value = crget( crptr(db), SvPVbyte(key, ksize), ksize, start, offset, &vsize );
+    kbyte = SvPV_const(key, ksize);
+    value = crget( crptr(db), kbyte, (int)ksize, start, offset, &vsize );
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -534,21 +542,23 @@ OUTPUT:
 bool
 DELETE(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
 CODE:
-    ksize = SvCUR(key);
-    RETVAL = crout( crptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = crout( crptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 EXISTS(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
 CODE:
-    ksize = SvCUR(key);
-    vsize = crvsiz( crptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    vsize = crvsiz( crptr(db), kbyte, (int)ksize );
     RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
@@ -562,7 +572,7 @@ CODE:
     if ( criterinit( crptr(db) ) ) {
         key = criternext( crptr(db), &ksize );
         if (NULL != key) {
-            RETVAL = newSVpvn(key, ksize);
+            RETVAL = newSVpvn(key, (STRLEN)ksize);
             cbfree(key);
         }
         else {
@@ -583,7 +593,7 @@ PREINIT:
 CODE:
     key = criternext( crptr(db), &ksize );
     if (NULL != key) {
-        RETVAL = newSVpvn(key, ksize);
+        RETVAL = newSVpvn(key, (STRLEN)ksize);
         cbfree(key);
     }
     else {
@@ -623,10 +633,11 @@ OUTPUT:
 int
 get_record_size(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
 CODE:
-    ksize = SvCUR(key);
-    RETVAL = crvsiz( crptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = crvsiz( crptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
@@ -738,14 +749,15 @@ OUTPUT:
 datum_value
 fetch_lob(QDBM_File db, datum_key key, int start = 0, int offset = -1)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     char* value;
 CODE:
-    ksize = SvCUR(key);
-    value = crgetlob( crptr(db), SvPVbyte(key, ksize), ksize, start, offset, &vsize );
+    kbyte = SvPV_const(key, ksize);
+    value = crgetlob( crptr(db), kbyte, (int)ksize, start, offset, &vsize );
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -778,21 +790,23 @@ OUTPUT:
 bool
 delete_lob(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
 CODE:
-    ksize = SvCUR(key);
-    RETVAL = croutlob( crptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = croutlob( crptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 exists_lob(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
 CODE:
-    ksize = SvCUR(key);
-    vsize = crvsizlob( crptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    vsize = crvsizlob( crptr(db), kbyte, (int)ksize );
     RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
@@ -856,18 +870,19 @@ CODE:
 datum_value
 FETCH(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     char* value;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    value = vlget( vlptr(db), SvPVbyte(key, ksize), ksize, &vsize );
+    kbyte = SvPV_const(key, ksize);
+    value = vlget( vlptr(db), kbyte, (int)ksize, &vsize );
 
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -934,27 +949,29 @@ OUTPUT:
 bool
 DELETE(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vlout( vlptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vlout( vlptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 EXISTS(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    vsize = vlvsiz( vlptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    vsize = vlvsiz( vlptr(db), kbyte, (int)ksize );
     RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
@@ -971,7 +988,7 @@ CODE:
     if ( vlcurfirst( vlptr(db) ) ) {
         key = vlcurkey( vlptr(db), &ksize );
         if (NULL != key) {
-            RETVAL = newSVpvn(key, ksize);
+            RETVAL = newSVpvn(key, (STRLEN)ksize);
             cbfree(key);
         }
         else {
@@ -996,7 +1013,7 @@ CODE:
     if ( vlcurnext( vlptr(db) ) ) {
         key = vlcurkey( vlptr(db), &ksize );
         if (NULL != key) {
-            RETVAL = newSVpvn(key, ksize);
+            RETVAL = newSVpvn(key, (STRLEN)ksize);
             cbfree(key);
         }
         else {
@@ -1012,39 +1029,42 @@ OUTPUT:
 int
 get_record_size(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vlvsiz( vlptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vlvsiz( vlptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 int
 count_match_records(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vlvnum( vlptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vlvnum( vlptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 delete_list(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vloutlist( vlptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vloutlist( vlptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
@@ -1052,7 +1072,8 @@ void
 fetch_list(QDBM_File db, datum_key key)
 PREINIT:
     int i;
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     const char* value;
     CBLIST* list;
@@ -1061,13 +1082,13 @@ PREINIT:
 PPCODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    list = vlgetlist( vlptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    list = vlgetlist( vlptr(db), kbyte, (int)ksize );
 
     if (NULL != list) {
         for (i = 0; i < cblistnum(list); i++) {
             value = cblistval(list, i, &vsize);
-            value_sv = newSVpvn(value, vsize);
+            value_sv = newSVpvn(value, (STRLEN)vsize);
             DBM_ckFilter(value_sv, filter_fetch_value, "filter_fetch_value");
             XPUSHs( sv_2mortal(value_sv) );
         }
@@ -1081,8 +1102,10 @@ bool
 store_list(QDBM_File db, datum_key key, ...)
 PREINIT:
     int i;
-    int ksize;
-    int vsize;
+    STRLEN ksize;
+    const char* kbyte;
+    STRLEN vsize;
+    const char* vbyte;
     CBLIST* list;
     dMY_CXT;
 CODE:
@@ -1091,11 +1114,13 @@ CODE:
     list = cblistopen();
     for (i = 2; i < items; i++) {
         DBM_ckFilter( ST(i), filter_store_value, "filter_store_value" );
-        vsize = SvCUR( ST(i) );
-        cblistpush(list, SvPVbyte( ST(i), vsize ), vsize);
+        SvGETMAGIC( ST(i) );
+        sv_utf8_downgrade( ST(i), 0 );
+        vbyte = SvPV_const( ST(i), vsize );
+        cblistpush(list, vbyte, (int)vsize);
     }
-    ksize = SvCUR(key);
-    RETVAL = vlputlist( vlptr(db), SvPVbyte(key, ksize), ksize, list );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vlputlist( vlptr(db), kbyte, (int)ksize, list );
 OUTPUT:
     RETVAL
 CLEANUP:
@@ -1159,26 +1184,28 @@ OUTPUT:
 bool
 move_forward(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vlcurjump( vlptr(db), SvPVbyte(key, ksize), ksize, VL_JFORWARD );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vlcurjump( vlptr(db), kbyte, (int)ksize, VL_JFORWARD );
 OUTPUT:
     RETVAL
 
 bool
 move_backword(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vlcurjump( vlptr(db), SvPVbyte(key, ksize), ksize, VL_JBACKWARD );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vlcurjump( vlptr(db), kbyte, (int)ksize, VL_JBACKWARD );
 OUTPUT:
     RETVAL
 
@@ -1193,7 +1220,7 @@ CODE:
     MY_CXT.comparer = db->comparer;
     key = vlcurkey( vlptr(db), &ksize );
     if (NULL != key) {
-        RETVAL = newSVpvn(key, ksize);
+        RETVAL = newSVpvn(key, (STRLEN)ksize);
         cbfree(key);
     }
     else {
@@ -1213,7 +1240,7 @@ CODE:
     MY_CXT.comparer = db->comparer;
     value = vlcurval( vlptr(db), &vsize );
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -1225,16 +1252,17 @@ OUTPUT:
 bool
 store_current(QDBM_File db, datum_value value)
 PREINIT:
-    int vsize;
+    STRLEN vsize;
+    const char* vbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    vsize = SvCUR(value);
+    vbyte = SvPV_const(value, vsize);
     RETVAL = vlcurput(
         vlptr(db),
-        SvPVbyte(value, vsize),
-        vsize,
+        vbyte,
+        (int)vsize,
         VL_CPCURRENT
     );
 OUTPUT:
@@ -1243,16 +1271,17 @@ OUTPUT:
 bool
 store_after(QDBM_File db, datum_value value)
 PREINIT:
-    int vsize;
+    STRLEN vsize;
+    const char* vbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    vsize = SvCUR(value);
+    vbyte = SvPV_const(value, vsize);
     RETVAL = vlcurput(
         vlptr(db),
-        SvPVbyte(value, vsize),
-        vsize,
+        vbyte,
+        (int)vsize,
         VL_CPAFTER
     );
 OUTPUT:
@@ -1261,16 +1290,17 @@ OUTPUT:
 bool
 store_before(QDBM_File db, datum_value value)
 PREINIT:
-    int vsize;
+    STRLEN vsize;
+    const char* vbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    vsize = SvCUR(value);
+    vbyte = SvPV_const(value, vsize);
     RETVAL = vlcurput(
         vlptr(db),
-        SvPVbyte(value, vsize),
-        vsize,
+        vbyte,
+        (int)vsize,
         VL_CPBEFORE
     );
 OUTPUT:
@@ -1498,18 +1528,19 @@ CODE:
 datum_value
 FETCH(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     char* value;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    value = vstget( vstptr(db), SvPVbyte(key, ksize), ksize, &vsize );
+    kbyte = SvPV_const(key, ksize);
+    value = vstget( vstptr(db), kbyte, (int)ksize, &vsize );
 
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -1576,27 +1607,29 @@ OUTPUT:
 bool
 DELETE(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vstout( vstptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstout( vstptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 EXISTS(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    vsize = vstvsiz( vstptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    vsize = vstvsiz( vstptr(db), kbyte, (int)ksize );
     RETVAL = (-1 != vsize);
 OUTPUT:
     RETVAL
@@ -1613,7 +1646,7 @@ CODE:
     if ( vstcurfirst( vstptr(db) ) ) {
         key = vstcurkey( vstptr(db), &ksize );
         if (NULL != key) {
-            RETVAL = newSVpvn(key, ksize);
+            RETVAL = newSVpvn(key, (STRLEN)ksize);
             cbfree(key);
         }
         else {
@@ -1638,7 +1671,7 @@ CODE:
     if ( vstcurnext( vstptr(db) ) ) {
         key = vstcurkey( vstptr(db), &ksize );
         if (NULL != key) {
-            RETVAL = newSVpvn(key, ksize);
+            RETVAL = newSVpvn(key, (STRLEN)ksize);
             cbfree(key);
         }
         else {
@@ -1654,39 +1687,42 @@ OUTPUT:
 int
 get_record_size(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vstvsiz( vstptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstvsiz( vstptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 int
 count_match_records(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vstvnum( vstptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstvnum( vstptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
 bool
 delete_list(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vstoutlist( vstptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstoutlist( vstptr(db), kbyte, (int)ksize );
 OUTPUT:
     RETVAL
 
@@ -1694,7 +1730,8 @@ void
 fetch_list(QDBM_File db, datum_key key)
 PREINIT:
     int i;
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     int vsize;
     const char* value;
     CBLIST* list;
@@ -1703,13 +1740,13 @@ PREINIT:
 PPCODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    list = vstgetlist( vstptr(db), SvPVbyte(key, ksize), ksize );
+    kbyte = SvPV_const(key, ksize);
+    list = vstgetlist( vstptr(db), kbyte, (int)ksize );
 
     if (NULL != list) {
         for (i = 0; i < cblistnum(list); i++) {
             value = cblistval(list, i, &vsize);
-            value_sv = newSVpvn(value, vsize);
+            value_sv = newSVpvn(value, (STRLEN)vsize);
             DBM_ckFilter(value_sv, filter_fetch_value, "filter_fetch_value");
             XPUSHs( sv_2mortal(value_sv) );
         }
@@ -1723,8 +1760,10 @@ bool
 store_list(QDBM_File db, datum_key key, ...)
 PREINIT:
     int i;
-    int ksize;
-    int vsize;
+    STRLEN ksize;
+    const char* kbyte;
+    STRLEN vsize;
+    const char* vbyte;
     CBLIST* list;
     dMY_CXT;
 CODE:
@@ -1733,11 +1772,13 @@ CODE:
     list = cblistopen();
     for (i = 2; i < items; i++) {
         DBM_ckFilter( ST(i), filter_store_value, "filter_store_value" );
-        vsize = SvCUR( ST(i) );
-        cblistpush(list, SvPVbyte( ST(i), vsize ), vsize);
+        SvGETMAGIC( ST(i) );
+        sv_utf8_downgrade( ST(i), 0 );
+        vbyte = SvPV_const( ST(i), vsize );
+        cblistpush(list, vbyte, (int)vsize);
     }
-    ksize = SvCUR(key);
-    RETVAL = vstputlist( vstptr(db), SvPVbyte(key, ksize), ksize, list );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstputlist( vstptr(db), kbyte, (int)ksize, list );
 OUTPUT:
     RETVAL
 CLEANUP:
@@ -1801,26 +1842,28 @@ OUTPUT:
 bool
 move_forward(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vstcurjump( vstptr(db), SvPVbyte(key, ksize), ksize, VST_JFORWARD );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstcurjump( vstptr(db), kbyte, (int)ksize, VST_JFORWARD );
 OUTPUT:
     RETVAL
 
 bool
 move_backword(QDBM_File db, datum_key key)
 PREINIT:
-    int ksize;
+    STRLEN ksize;
+    const char* kbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    ksize = SvCUR(key);
-    RETVAL = vstcurjump( vstptr(db), SvPVbyte(key, ksize), ksize, VST_JBACKWARD );
+    kbyte = SvPV_const(key, ksize);
+    RETVAL = vstcurjump( vstptr(db), kbyte, (int)ksize, VST_JBACKWARD );
 OUTPUT:
     RETVAL
 
@@ -1835,7 +1878,7 @@ CODE:
     MY_CXT.comparer = db->comparer;
     key = vstcurkey( vstptr(db), &ksize );
     if (NULL != key) {
-        RETVAL = newSVpvn(key, ksize);
+        RETVAL = newSVpvn(key, (STRLEN)ksize);
         cbfree(key);
     }
     else {
@@ -1855,7 +1898,7 @@ CODE:
     MY_CXT.comparer = db->comparer;
     value = vstcurval( vstptr(db), &vsize );
     if (NULL != value) {
-        RETVAL = newSVpvn(value, vsize);
+        RETVAL = newSVpvn(value, (STRLEN)vsize);
         cbfree(value);
     }
     else {
@@ -1867,16 +1910,17 @@ OUTPUT:
 bool
 store_current(QDBM_File db, datum_value value)
 PREINIT:
-    int vsize;
+    STRLEN vsize;
+    const char* vbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    vsize = SvCUR(value);
+    vbyte = SvPV_const(value, vsize);
     RETVAL = vstcurput(
         vstptr(db),
-        SvPVbyte(value, vsize),
-        vsize,
+        vbyte,
+        (int)vsize,
         VL_CPCURRENT
     );
 OUTPUT:
@@ -1885,16 +1929,17 @@ OUTPUT:
 bool
 store_after(QDBM_File db, datum_value value)
 PREINIT:
-    int vsize;
+    STRLEN vsize;
+    const char* vbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    vsize = SvCUR(value);
+    vbyte = SvPV_const(value, vsize);
     RETVAL = vstcurput(
         vstptr(db),
-        SvPVbyte(value, vsize),
-        vsize,
+        vbyte,
+        (int)vsize,
         VL_CPAFTER
     );
 OUTPUT:
@@ -1903,16 +1948,17 @@ OUTPUT:
 bool
 store_before(QDBM_File db, datum_value value)
 PREINIT:
-    int vsize;
+    STRLEN vsize;
+    const char* vbyte;
     dMY_CXT;
 CODE:
     SAVESPTR(MY_CXT.comparer);
     MY_CXT.comparer = db->comparer;
-    vsize = SvCUR(value);
+    vbyte = SvPV_const(value, vsize);
     RETVAL = vstcurput(
         vstptr(db),
-        SvPVbyte(value, vsize),
-        vsize,
+        vbyte,
+        (int)vsize,
         VL_CPBEFORE
     );
 OUTPUT:
@@ -2316,7 +2362,8 @@ bool
 merge(SV* package, const char* name, ...)
 PREINIT:
     int i;
-    int elemsize;
+    STRLEN elemsize;
+    const char* elembyte;
     CBLIST* elemnames;
 CODE:
     if ( sv_isobject(package) ) {
@@ -2325,8 +2372,10 @@ CODE:
     else {
         elemnames = cblistopen();
         for (i = 2; i < items; i++) {
-            elemsize = SvCUR( ST(i) );
-            cblistpush(elemnames, SvPVbyte( ST(i), elemsize ), elemsize);
+            SvGETMAGIC( ST(i) );
+            sv_utf8_downgrade( ST(i), 0 );
+            elembyte = SvPV_const( ST(i), elemsize );
+            cblistpush(elemnames, elembyte, (int)elemsize);
         }
         RETVAL = odmerge(name, elemnames);
     }
@@ -2351,8 +2400,8 @@ PPCODE:
         cbmapiterinit(scores);
         while ( NULL != ( key = cbmapiternext(scores, &ksize) ) ) {
             value = cbmapiterval(key, &vsize);
-            XPUSHs( sv_2mortal( newSVpvn(key, ksize) ) );
-            XPUSHs( sv_2mortal( newSVpvn(value, vsize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(key, (STRLEN)ksize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(value, (STRLEN)vsize) ) );
         }
         cbmapclose(scores);
     }
@@ -2401,7 +2450,7 @@ PPCODE:
     else {
         for (i = 0; i < cblistnum(appearance_words); i++) {
             value = cblistval(appearance_words, i, &vsize);
-            XPUSHs( sv_2mortal( newSVpvn(value, vsize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(value, (STRLEN)vsize) ) );
         }
         cblistclose(appearance_words);
     }
@@ -2437,7 +2486,7 @@ PPCODE:
     errors = cblistopen();
     pair = odquery(db, query, &length, errors);
     if (NULL == pair) {
-        errsv = newSVpvn("", 0);
+        errsv = newSVpvn("", (STRLEN)0);
         SAVEMORTALIZESV(errsv);
         for (i = 0; i < cblistnum(errors); i++) {
             value = cblistval(errors, i, &vsize);
@@ -2512,7 +2561,7 @@ PPCODE:
     if ( 0 < cblistnum(words) ) {
         for (i = 0; i < cblistnum(words); i++) {
             value = cblistval(words, i, &vsize);
-            XPUSHs( sv_2mortal( newSVpvn(value, vsize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(value, (STRLEN)vsize) ) );
         }
     }
     else {
@@ -2531,7 +2580,7 @@ PPCODE:
     if ( 0 < cblistnum(words) ) {
         for (i = 0; i < cblistnum(words); i++) {
             value = cblistval(words, i, &vsize);
-            XPUSHs( sv_2mortal( newSVpvn(value, vsize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(value, (STRLEN)vsize) ) );
         }
     }
     else {
@@ -2556,8 +2605,8 @@ PPCODE:
         cbmapiterinit(scores);
         while ( NULL != ( key = cbmapiternext(scores, &ksize) ) ) {
             value = cbmapiterval(key, &vsize);
-            XPUSHs( sv_2mortal( newSVpvn(key, ksize) ) );
-            XPUSHs( sv_2mortal( newSVpvn(value, vsize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(key, (STRLEN)ksize) ) );
+            XPUSHs( sv_2mortal( newSVpvn(value, (STRLEN)vsize) ) );
         }
         cbmapclose(scores);
     }

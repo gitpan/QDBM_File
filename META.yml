@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               QDBM_File
-version:            1.11
+version:            1.12
 abstract:           Tied access to Quick Database Manager
 author:
     - Toshiyuki Yamato <toshiyuki.yamato@gmail.com>

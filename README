@@ -1,4 +1,4 @@
-QDBM_File 1.11
+QDBM_File 1.12
 
 QDBM_File is a module which allows Perl programs to make use of the
 facilities provided by the qdbm library. If you use this module, you

@@ -11,10 +11,14 @@ INPUT
 
 T_DATUM_K
     DBM_ckFilter($arg, filter_store_key, \"filter_store_key\");
+    SvGETMAGIC($arg);
+    sv_utf8_downgrade($arg, 0);
     $var = $arg;
 
 T_DATUM_V
     DBM_ckFilter($arg, filter_store_value, \"filter_store_value\");
+    SvGETMAGIC($arg);
+    sv_utf8_downgrade($arg, 0);
     $var = $arg;
 
 T_ODEUM
